@@ -181,17 +181,20 @@ SHOOT_COOLDOWN = 1.0  # Seconds
 last_shot_time = 0.0
 
 # --- Player Variables ---
-movement_speed = 200 # Player movement speed, made global for upgrades
+INITIAL_MOVEMENT_SPEED = 200
+movement_speed = INITIAL_MOVEMENT_SPEED # Player movement speed, made global for upgrades
 
 
 # --- UI Bar Setup ---
+INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10 # Number of gold particles to collect to fill the bar
+MAX_PICKUPS_FOR_FULL_BAR = INITIAL_MAX_PICKUPS_FOR_FULL_BAR
+
 BAR_HEIGHT = 25  # Height of the horizontal bar (pixels)
 BAR_MAX_WIDTH = 300 # Max width of the fillable bar
 BAR_X = screen.get_width() // 2 - BAR_MAX_WIDTH // 2 # Centered horizontally
 BAR_Y = 20 # Small margin from the top edge
 BAR_BG_COLOR = dark_slate_gray # Background color of the bar
 BAR_FILL_COLOR = gold # Color of the filling part of the bar
-MAX_PICKUPS_FOR_FULL_BAR = 10 # Number of gold particles to collect to fill the bar
 current_pickups_count = 0 # How many pickups collected towards the current bar fill
 
 # --- Store Setup ---
@@ -199,6 +202,9 @@ store_active = False
 STORE_BG_COLOR = dark_blue
 STORE_TEXT_COLOR = white
 STORE_BUTTON_COLOR = steel_blue
+
+INITIAL_SHOOT_COOLDOWN = 1.0
+SHOOT_COOLDOWN = INITIAL_SHOOT_COOLDOWN # Seconds
 STORE_BUTTON_HOVER_COLOR = light_sky_blue
 
 # --- Game Timer ---
@@ -229,6 +235,27 @@ store_items = [
 continue_button_text = "Continue Game"
 continue_button_rect = None
 
+def reset_game_state():
+    global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed
+    global game_over_active, store_active, enemy_spawn_timer, last_shot_time
+
+    player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
+    enemies.clear()
+    particles.clear() # Player shots
+    pickup_particles.clear() # Gold particles
+
+    total_game_time_seconds = 0.0
+    current_pickups_count = 0
+    MAX_PICKUPS_FOR_FULL_BAR = INITIAL_MAX_PICKUPS_FOR_FULL_BAR
+    SHOOT_COOLDOWN = INITIAL_SHOOT_COOLDOWN
+    movement_speed = INITIAL_MOVEMENT_SPEED
+
+    enemy_spawn_timer = 0.0
+    last_shot_time = 0.0
+
+    game_over_active = False
+    store_active = False
 
 def draw_game_over_screen(surface, final_time_seconds):
     # Semi-transparent overlay
@@ -251,10 +278,15 @@ def draw_game_over_screen(surface, final_time_seconds):
     surface.blit(score_surf, score_rect)
 
     # Instructions
-    instructions_text = "Press 'Q' to Quit"
-    instructions_surf = ui_font.render(instructions_text, True, grey)
-    instructions_rect = instructions_surf.get_rect(center=(surface.get_width() / 2, score_rect.bottom + 50))
-    surface.blit(instructions_surf, instructions_rect)
+    quit_text = "Press 'Q' to Quit"
+    restart_text = "Press 'R' to Restart"
+
+    quit_surf = ui_font.render(quit_text, True, grey)
+    quit_rect = quit_surf.get_rect(center=(surface.get_width() / 2, score_rect.bottom + 40))
+    surface.blit(quit_surf, quit_rect)
+    restart_surf = ui_font.render(restart_text, True, grey)
+    restart_rect = restart_surf.get_rect(center=(surface.get_width() / 2, quit_rect.bottom + 30))
+    surface.blit(restart_surf, restart_rect)
 
 def draw_store_window(surface):
     global continue_button_rect # Allow modification
@@ -311,7 +343,8 @@ while running:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     running = False
-                # Consider adding a restart key like K_r here in the future
+                elif event.key == pygame.K_r:
+                    reset_game_state()
         elif store_active: # Store is active, and game is not over
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # Left mouse button
                 mouse_pos = pygame.mouse.get_pos()
@@ -319,10 +352,10 @@ while running:
                     if item["rect"] and item["rect"].collidepoint(mouse_pos):
                         # Apply upgrade
                         if item["id"] == "faster_shots":
-                            SHOOT_COOLDOWN = max(0.05, SHOOT_COOLDOWN * 0.85) # Decrease by 15%, with a minimum
+                            SHOOT_COOLDOWN = max(0.05, SHOOT_COOLDOWN * 0.85) 
                             print(f"Faster Shots purchased! New cooldown: {SHOOT_COOLDOWN:.2f}")
                         elif item["id"] == "player_speed":
-                            movement_speed *= 1.15 # Increase by 15%
+                            movement_speed = int(movement_speed * 1.15)
                             print(f"Player Speed+ purchased! New speed: {movement_speed:.0f}")
 
                         # Increase the requirement for the next bar fill
