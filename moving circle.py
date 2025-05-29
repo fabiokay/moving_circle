@@ -28,8 +28,6 @@ medium_purple = pygame.Color("#9370DB")
 dark_sea_green = pygame.Color("#8FBC8F")
 light_sky_blue = pygame.Color("#87CEFA")
 crimson = pygame.Color("#740B20")
-
-# --- Additional Colors ---
 gold = pygame.Color("#FFF200") # For pickup particles
 dark_blue = pygame.Color("#00008B") # For store background
 
@@ -207,13 +205,20 @@ STORE_BUTTON_HOVER_COLOR = light_sky_blue
 total_game_time_seconds = 0.0
 ui_font = None # Will be initialized with store fonts
 
+# --- Game Over State ---
+game_over_active = False
+game_over_font_large = None # For "GAME OVER" text
+# ui_font (store_font_medium) will be used for smaller game over text like score
+
 try:
     store_font_large = pygame.font.Font(None, 48) # For title
     store_font_medium = pygame.font.Font(None, 36) # For buttons/text
+    game_over_font_large = pygame.font.Font(None, 96) # Larger font for "GAME OVER"
 except pygame.error as e:
     print(f"Font loading error: {e}. Using default system font.")
     store_font_large = pygame.font.SysFont(None, 48)
     store_font_medium = pygame.font.SysFont(None, 36)
+    game_over_font_large = pygame.font.SysFont(None, 96)
 ui_font = store_font_medium # Use the medium font for UI elements like the timer
 
 
@@ -223,6 +228,33 @@ store_items = [
 ]
 continue_button_text = "Continue Game"
 continue_button_rect = None
+
+
+def draw_game_over_screen(surface, final_time_seconds):
+    # Semi-transparent overlay
+    overlay_color = pygame.Color(10, 10, 20, 200) # Dark semi-transparent
+    overlay_surface = pygame.Surface((surface.get_width(), surface.get_height()), pygame.SRCALPHA)
+    overlay_surface.fill(overlay_color)
+    surface.blit(overlay_surface, (0, 0))
+
+    # "GAME OVER" Text
+    game_over_text_surf = game_over_font_large.render("GAME OVER", True, crimson)
+    game_over_text_rect = game_over_text_surf.get_rect(center=(surface.get_width() / 2, surface.get_height() / 3))
+    surface.blit(game_over_text_surf, game_over_text_rect)
+
+    # Final Score (Time)
+    minutes = int(final_time_seconds // 60)
+    seconds = int(final_time_seconds % 60)
+    time_str = f"Time Survived: {minutes:02}:{seconds:02}"
+    score_surf = ui_font.render(time_str, True, white) # ui_font is store_font_medium
+    score_rect = score_surf.get_rect(center=(surface.get_width() / 2, game_over_text_rect.bottom + 60))
+    surface.blit(score_surf, score_rect)
+
+    # Instructions
+    instructions_text = "Press 'Q' to Quit"
+    instructions_surf = ui_font.render(instructions_text, True, grey)
+    instructions_rect = instructions_surf.get_rect(center=(surface.get_width() / 2, score_rect.bottom + 50))
+    surface.blit(instructions_surf, instructions_rect)
 
 def draw_store_window(surface):
     global continue_button_rect # Allow modification
@@ -267,47 +299,53 @@ def draw_store_window(surface):
     surface.blit(continue_surf, continue_surf_rect)
 
 while running:
-    # poll for events
-    # pygame.QUIT event means the user clicked X to close your window
+    # dt is delta time in seconds since last frame, used for framerate-independent physics.
+    dt = clock.tick(60) / 1000
+
+    # --- Event Handling ---
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-        if store_active:
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1: # Left mouse button
-                    mouse_pos = pygame.mouse.get_pos()
-                    for item in store_items:
-                        if item["rect"] and item["rect"].collidepoint(mouse_pos):
-                            # Apply upgrade
-                            if item["id"] == "faster_shots":
-                                SHOOT_COOLDOWN = max(0.05, SHOOT_COOLDOWN * 0.85) # Decrease by 15%, with a minimum
-                                print(f"Faster Shots purchased! New cooldown: {SHOOT_COOLDOWN:.2f}")
-                            elif item["id"] == "player_speed":
-                                movement_speed *= 1.15 # Increase by 15%
-                                print(f"Player Speed+ purchased! New speed: {movement_speed:.0f}")
+        if game_over_active:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
+                # Consider adding a restart key like K_r here in the future
+        elif store_active: # Store is active, and game is not over
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # Left mouse button
+                mouse_pos = pygame.mouse.get_pos()
+                for item in store_items:
+                    if item["rect"] and item["rect"].collidepoint(mouse_pos):
+                        # Apply upgrade
+                        if item["id"] == "faster_shots":
+                            SHOOT_COOLDOWN = max(0.05, SHOOT_COOLDOWN * 0.85) # Decrease by 15%, with a minimum
+                            print(f"Faster Shots purchased! New cooldown: {SHOOT_COOLDOWN:.2f}")
+                        elif item["id"] == "player_speed":
+                            movement_speed *= 1.15 # Increase by 15%
+                            print(f"Player Speed+ purchased! New speed: {movement_speed:.0f}")
 
-                            # Increase the requirement for the next bar fill
-                            MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)
-                            print(f"Next upgrade will require {MAX_PICKUPS_FOR_FULL_BAR} pickups.")
+                        # Increase the requirement for the next bar fill
+                        MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)
+                        print(f"Next upgrade will require {MAX_PICKUPS_FOR_FULL_BAR} pickups.")
 
-                            store_active = False
-                            current_pickups_count = 0 # Reset bar
-                            break 
-                    # If no item was purchased (due to break), check continue button
-                    # Add 'and store_active' to ensure this only runs if the store wasn't closed by a purchase
-                    if store_active and continue_button_rect and continue_button_rect.collidepoint(mouse_pos):
                         store_active = False
                         current_pickups_count = 0 # Reset bar
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+                        break 
+                # If no item was purchased (due to break), check continue button
+                if store_active and continue_button_rect and continue_button_rect.collidepoint(mouse_pos):
                     store_active = False
-                    current_pickups_count = 0 # Reset bar when escaping store
+                    current_pickups_count = 0 # Reset bar
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                store_active = False
+                current_pickups_count = 0 # Reset bar when escaping store
+        else: # Gameplay is active (not game over, not store)
+            # Handle other gameplay-specific events if any (currently none besides quit handled globally)
+            pass
 
-    # --- Background Color Transition Logic ---
-    # This should happen every frame, regardless of store state
+    # --- Game State Updates ---
+    # Background color transition (always active, even on game over screen for effect)
     bg_color_transition_progress += BG_COLOR_TRANSITION_SPEED * dt
-
     if bg_color_transition_progress >= 1.0:
         bg_color_transition_progress = 0.0 # Reset progress
         current_bg_color_index = next_bg_color_index
@@ -318,173 +356,156 @@ while running:
     color2 = BG_CYCLE_COLORS[next_bg_color_index]
     dynamic_bg_color = color1.lerp(color2, bg_color_transition_progress)
 
-    # fill the screen with a color to wipe away anything from last frame
-    screen.fill(dynamic_bg_color)
+    if not game_over_active:
+        if not store_active:
+            # --- Active Gameplay Logic ---
+            total_game_time_seconds += dt # Increment game timer
 
-    if not store_active:
-        move_vector = pygame.Vector2(0, 0)
-        total_game_time_seconds += dt # Increment game timer only when game is active
+            # Player Movement
+            move_vector = pygame.Vector2(0, 0)
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_w]: move_vector.y -= 1
+            if keys[pygame.K_s]: move_vector.y += 1
+            if keys[pygame.K_a]: move_vector.x -= 1
+            if keys[pygame.K_d]: move_vector.x += 1
+            if move_vector.length_squared() > 0:
+                move_vector.normalize_ip()
+                player_pos += move_vector * movement_speed * dt
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_w]:
-            move_vector.y -= 1
-        if keys[pygame.K_s]:
-            move_vector.y += 1
-        if keys[pygame.K_a]:
-            move_vector.x -= 1
-        if keys[pygame.K_d]:
-            move_vector.x += 1
-
-        if move_vector.length_squared() > 0: # Check if there's any movement
-            move_vector.normalize_ip() # Normalize to make length 1
-            player_pos += move_vector * movement_speed * dt
-
-        # --- Shooting Logic ---
-        current_time = pygame.time.get_ticks() / 1000.0 # Current time in seconds
-        if keys[pygame.K_SPACE] and (current_time - last_shot_time > SHOOT_COOLDOWN):
-            if enemies: # Only shoot if there are enemies
+            # Shooting Logic
+            current_time = pygame.time.get_ticks() / 1000.0
+            if keys[pygame.K_SPACE] and (current_time - last_shot_time > SHOOT_COOLDOWN) and enemies:
                 last_shot_time = current_time
-                # Find nearest enemy
-                nearest_enemy = None
-                min_dist_sq = float('inf')
-                for enemy in enemies:
-                    dist_sq = (enemy.pos - player_pos).length_squared()
-                    if dist_sq < min_dist_sq:
-                        min_dist_sq = dist_sq
-                        nearest_enemy = enemy
-                
-                if nearest_enemy:
+                nearest_enemy = min(enemies, key=lambda e: (e.pos - player_pos).length_squared())
+                if nearest_enemy: # Should always be true if enemies list is not empty
                     particles.append(Particle(player_pos, nearest_enemy.pos, color=light_sky_blue))
 
-        # --- Enemy Spawning ---
-        enemy_spawn_timer += dt
-        if enemy_spawn_timer >= ENEMY_SPAWN_INTERVAL and len(enemies) < MAX_ENEMIES:
-            enemy_spawn_timer = 0.0  # Reset timer
+            # Enemy Spawning
+            enemy_spawn_timer += dt
+            if enemy_spawn_timer >= ENEMY_SPAWN_INTERVAL and len(enemies) < MAX_ENEMIES:
+                enemy_spawn_timer = 0.0
+                if random.random() < 0.6: # Spawn Triangle
+                    enemies.append(EnemyTriangle(screen.get_width(), screen.get_height()))
+                else: # Spawn Square Group
+                    num_squares = random.randint(SQUARE_GROUP_SIZE_MIN, SQUARE_GROUP_SIZE_MAX)
+                    edge = random.choice(["top", "bottom", "left", "right"])
+                    margin = 30
+                    screen_w, screen_h = screen.get_width(), screen.get_height()
+                    if edge == "top": cx, cy = random.uniform(margin*2, screen_w-margin*2), -margin
+                    elif edge == "bottom": cx, cy = random.uniform(margin*2, screen_w-margin*2), screen_h + margin
+                    elif edge == "left": cx, cy = -margin, random.uniform(margin*2, screen_h-margin*2)
+                    else: cx, cy = screen_w + margin, random.uniform(margin*2, screen_h-margin*2)
+                    for _ in range(num_squares):
+                        if len(enemies) < MAX_ENEMIES:
+                            offset_pos = pygame.Vector2(cx + random.uniform(-25, 25), cy + random.uniform(-25, 25))
+                            enemies.append(SquareEnemy(offset_pos, screen_w, screen_h))
+            
+            # Update Projectiles (Player Shots)
+            for particle in particles[:]:
+                particle.update(dt)
+                if particle.is_offscreen(screen.get_width(), screen.get_height()):
+                    particles.remove(particle)
 
-            # Decide whether to spawn a triangle or a group of squares
-            if random.random() < 0.6: # 60% chance to spawn a triangle
-                if len(enemies) < MAX_ENEMIES:
-                    new_enemy = EnemyTriangle(screen.get_width(), screen.get_height())
-                    enemies.append(new_enemy)
-            else: # 40% chance to spawn a square group
-                num_squares_to_spawn = random.randint(SQUARE_GROUP_SIZE_MIN, SQUARE_GROUP_SIZE_MAX)
+            # Enemy Update
+            for enemy in enemies: # No need to copy if not removing during iteration here
+                enemy.update(player_pos, dt)
+
+            # Collision: Projectile vs Enemy
+            for particle in particles[:]:
+                for enemy in enemies[:]: # Copy for safe removal
+                    enemy_col_radius = enemy.height * 0.5 if isinstance(enemy, EnemyTriangle) else enemy.size * 0.707
+                    if (particle.pos - enemy.pos).length_squared() < (particle.radius + enemy_col_radius)**2:
+                        if particle in particles: particles.remove(particle) # Check if still exists
+                        destroyed = enemy.take_damage() if isinstance(enemy, SquareEnemy) else True
+                        if destroyed:
+                            pickup_particles.append(PickupParticle(enemy.pos, color=gold, radius=7))
+                            if enemy in enemies: enemies.remove(enemy) # Check if still exists
+                        break # Particle can only hit one enemy
+
+            # Collision: Player vs Pickup Particle
+            pickups_to_keep = []
+            for pickup in pickup_particles:
+                if (player_pos - pickup.pos).length_squared() < (player_radius + pickup.radius)**2:
+                    if current_pickups_count < MAX_PICKUPS_FOR_FULL_BAR:
+                        current_pickups_count += 1
+                    if current_pickups_count >= MAX_PICKUPS_FOR_FULL_BAR and not store_active: # Check store_active again
+                        store_active = True
+                        current_pickups_count = MAX_PICKUPS_FOR_FULL_BAR # Cap it
+                else:
+                    pickups_to_keep.append(pickup)
+            pickup_particles = pickups_to_keep
+
+            # Player Boundary Checks
+            player_pos.x = max(player_radius, min(player_pos.x, screen.get_width() - player_radius))
+            player_pos.y = max(player_radius, min(player_pos.y, screen.get_height() - player_radius))
+
+            # --- Collision Detection (Player vs Enemy) ---
+            for enemy in enemies: # Iterate without copying if just checking
+                enemy_hitbox_radius_for_player = 0
+                if isinstance(enemy, EnemyTriangle):
+                    # For triangle, pos is the tip. A smaller radius from the tip for player collision.
+                    enemy_hitbox_radius_for_player = enemy.height * 0.4 
+                elif isinstance(enemy, SquareEnemy):
+                    # For square, pos is the center. Radius is approx half diagonal.
+                    enemy_hitbox_radius_for_player = enemy.size * 0.7 # A bit more generous than 0.707
                 
-                # Determine a common spawn edge and general area for the group
-                edge = random.choice(["top", "bottom", "left", "right"])
-                margin = 30 # Margin from edge for the group's center
-                group_center_x, group_center_y = 0, 0
-                screen_w, screen_h = screen.get_width(), screen.get_height()
+                if (player_pos - enemy.pos).length_squared() < (player_radius + enemy_hitbox_radius_for_player)**2:
+                    game_over_active = True
+                    store_active = False # Ensure store doesn't open if game over happens simultaneously
+                    print(f"GAME OVER: Player collided with {type(enemy).__name__} at {enemy.pos}")
+                    # Optional: Clear dynamic elements for a cleaner game over screen
+                    # enemies.clear()
+                    # particles.clear() 
+                    # pickup_particles.clear()
+                    break # One collision is enough to end the game
+        # else: store is active, most gameplay logic is paused
+    # else: game is over, all gameplay logic is paused
 
-                if edge == "top": group_center_x, group_center_y = random.uniform(margin*2, screen_w-margin*2), -margin
-                elif edge == "bottom": group_center_x, group_center_y = random.uniform(margin*2, screen_w-margin*2), screen_h + margin
-                elif edge == "left": group_center_x, group_center_y = -margin, random.uniform(margin*2, screen_h-margin*2)
-                else: group_center_x, group_center_y = screen_w + margin, random.uniform(margin*2, screen_h-margin*2)
+    # --- Drawing ---
+    screen.fill(dynamic_bg_color) # Always fill screen with current background
 
-                for _ in range(num_squares_to_spawn):
-                    if len(enemies) < MAX_ENEMIES:
-                        offset_pos = pygame.Vector2(group_center_x + random.uniform(-25, 25), group_center_y + random.uniform(-25, 25))
-                        enemies.append(SquareEnemy(offset_pos, screen_w, screen_h))
+    if game_over_active:
+        draw_game_over_screen(screen, total_game_time_seconds)
+    else: # Game is not over
+        # Draw pickup particles (gold)
+        for pickup in pickup_particles:
+            pickup.draw(screen)
         
-        # --- Update and Draw Particles ---
-        for particle in particles[:]:
-            particle.update(dt)
-            if particle.is_offscreen(screen.get_width(), screen.get_height()):
-                particles.remove(particle)
-            else:
+        # Draw player projectiles (shots) - only if not in store
+        if not store_active:
+            for particle in particles: # Player shots
                 particle.draw(screen)
 
-        # --- Enemy Update and Draw ---
-        for enemy in enemies[:]: 
-            enemy.update(player_pos, dt)
-            if isinstance(enemy, EnemyTriangle):
-                enemy.draw(screen, player_pos) 
-            else: 
-                enemy.draw(screen)
-
-        # --- Collision Detection (Particle vs Enemy) ---
-        for particle in particles[:]:
-            for enemy in enemies[:]:
-                enemy_collision_radius = 0
+        # Draw enemies - only if not in store
+        if not store_active:
+            for enemy in enemies:
                 if isinstance(enemy, EnemyTriangle):
-                    enemy_collision_radius = enemy.height * 0.5 
-                elif isinstance(enemy, SquareEnemy):
-                    enemy_collision_radius = enemy.size * 0.707 
+                    enemy.draw(screen, player_pos) 
+                else: # SquareEnemy
+                    enemy.draw(screen)
+        
+        # Draw player
+        pygame.draw.circle(screen, crimson, player_pos, player_radius)
 
-                if (particle.pos - enemy.pos).length_squared() < (particle.radius + enemy_collision_radius)**2:
-                    particles.remove(particle) 
-                    destroyed = False
-                    if isinstance(enemy, SquareEnemy):
-                        if enemy.take_damage(): 
-                            destroyed = True
-                    else: 
-                        destroyed = True
-                    
-                    if destroyed:
-                        pickup_particles.append(PickupParticle(enemy.pos, color=gold, radius=7))
-                        enemies.remove(enemy)
-                    break 
+        # Draw UI Bar for pickups
+        pygame.draw.rect(screen, BAR_BG_COLOR, (BAR_X, BAR_Y, BAR_MAX_WIDTH, BAR_HEIGHT))
+        fill_ratio = min(current_pickups_count / MAX_PICKUPS_FOR_FULL_BAR, 1.0) if MAX_PICKUPS_FOR_FULL_BAR > 0 else 0
+        actual_fill_width = fill_ratio * BAR_MAX_WIDTH
+        pygame.draw.rect(screen, BAR_FILL_COLOR, (BAR_X, BAR_Y, actual_fill_width, BAR_HEIGHT))
 
-        # --- Collision Detection (Player vs Pickup Particle) ---
-        pickups_to_keep = []
-        for pickup in pickup_particles:
-            if (player_pos - pickup.pos).length_squared() < (player_radius + pickup.radius)**2:
-                if current_pickups_count < MAX_PICKUPS_FOR_FULL_BAR:
-                    current_pickups_count += 1
-                if current_pickups_count >= MAX_PICKUPS_FOR_FULL_BAR and not store_active:
-                    store_active = True
-                    current_pickups_count = MAX_PICKUPS_FOR_FULL_BAR # Cap it
-            else:
-                pickups_to_keep.append(pickup)
-        pickup_particles = pickups_to_keep
+        # Draw Game Timer (top right)
+        minutes = int(total_game_time_seconds // 60)
+        seconds = int(total_game_time_seconds % 60)
+        timer_text = f"{minutes:02}:{seconds:02}"
+        timer_surf = ui_font.render(timer_text, True, white)
+        timer_rect = timer_surf.get_rect(topright=(screen.get_width() - 20, 20))
+        screen.blit(timer_surf, timer_rect)
 
-        # --- Boundary Checks ---
-        if player_pos.x - player_radius < 0: player_pos.x = player_radius
-        if player_pos.x + player_radius > screen.get_width(): player_pos.x = screen.get_width() - player_radius
-        if player_pos.y - player_radius < 0: player_pos.y = player_radius
-        if player_pos.y + player_radius > screen.get_height(): player_pos.y = screen.get_height() - player_radius
-
-    # --- Draw Pickup Particles (always draw, even if store is active) ---
-    for pickup in pickup_particles: # Draw remaining pickups
-        pickup.draw(screen)
-
-    # --- Draw everything ---
-
-    # --- Draw the Horizontal Fill Bar ---
-    # Draw bar background
-    pygame.draw.rect(screen, BAR_BG_COLOR, (BAR_X, BAR_Y, BAR_MAX_WIDTH, BAR_HEIGHT))
-    # Calculate fill width
-    fill_ratio = 0
-    if MAX_PICKUPS_FOR_FULL_BAR > 0: # Avoid division by zero
-        fill_ratio = min(current_pickups_count / MAX_PICKUPS_FOR_FULL_BAR, 1.0)
-    
-    actual_fill_width = fill_ratio * BAR_MAX_WIDTH
-    # Draw the fill part (grows from left to right)
-    pygame.draw.rect(screen, BAR_FILL_COLOR, (BAR_X, BAR_Y, actual_fill_width, BAR_HEIGHT))
-
-    # Draw player on top of particles and enemies
-    pygame.draw.circle(screen, crimson, player_pos, player_radius)
-
-    # --- Draw Game Timer ---
-    minutes = int(total_game_time_seconds // 60)
-    seconds = int(total_game_time_seconds % 60)
-    timer_text = f"{minutes:02}:{seconds:02}"
-    timer_surf = ui_font.render(timer_text, True, white)
-    timer_rect = timer_surf.get_rect(topright=(screen.get_width() - 20, 20)) # 20px margin
-    screen.blit(timer_surf, timer_rect)
-
-
-
-    # --- Draw Store Window (if active) ---
-    if store_active:
-        draw_store_window(screen)
+        if store_active: # Draw store on top if active (and game not over)
+            draw_store_window(screen)
 
     # flip() the display to put your work on screen
     pygame.display.flip()
-
-    # limits FPS to 60
-    # dt is delta time in seconds since last frame, used for framerate-
-    # independent physics.
-    dt = clock.tick(60) / 1000
 
 pygame.display.quit() # Explicitly quit display before pygame.quit()
 pygame.quit()
