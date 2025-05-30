@@ -396,10 +396,14 @@ while running:
             # Player Movement
             move_vector = pygame.Vector2(0, 0)
             keys = pygame.key.get_pressed()
-            if keys[pygame.K_w]: move_vector.y -= 1
-            if keys[pygame.K_s]: move_vector.y += 1
-            if keys[pygame.K_a]: move_vector.x -= 1
-            if keys[pygame.K_d]: move_vector.x += 1
+            if keys[pygame.K_w]:
+                move_vector.y -= 1
+            if keys[pygame.K_s]:
+                move_vector.y += 1
+            if keys[pygame.K_a]:
+                move_vector.x -= 1
+            if keys[pygame.K_d]:
+                move_vector.x += 1
             if move_vector.length_squared() > 0:
                 move_vector.normalize_ip()
                 player_pos += move_vector * movement_speed * dt
