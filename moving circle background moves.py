@@ -173,14 +173,16 @@ class SquareEnemy:
 
 # --- Pickup Particle Setup ---
 class PickupParticle:
-    def __init__(self, pos, color=gold, radius=7):
+    def __init__(self, pos, color=gold, radius=7, value=1):
         self.pos = pygame.Vector2(pos) # Position where it's dropped
         self.radius = radius
         self.color = color
+        self.value = value # How much this pickup is worth
 
     def draw(self, surface, camera_offset):
         screen_pos = self.pos - camera_offset
         pygame.draw.circle(surface, self.color, (int(screen_pos.x), int(screen_pos.y)), self.radius)
+
 
 # --- Enemy Variables ---
 enemies = []
@@ -190,6 +192,9 @@ MAX_ENEMIES = 50 # Maximum number of enemies on screen (reduced a bit due to gro
 SQUARE_GROUP_SIZE_MIN = 2
 SQUARE_GROUP_SIZE_MAX = 4
 pickup_particles = [] # List to store pickup particles
+SPECIAL_PICKUP_CHANCE = 0.15 # 15% chance for a special pickup
+SPECIAL_PICKUP_COLOR = pink # Color for special, more valuable pickups
+SPECIAL_PICKUP_VALUE = 2
 
 # --- Shooting Variables
 particles = []
@@ -496,7 +501,12 @@ while running:
                         if particle in particles: particles.remove(particle) # Check if still exists
                         destroyed = enemy.take_damage() if isinstance(enemy, SquareEnemy) else True
                         if destroyed:
-                            pickup_particles.append(PickupParticle(enemy.pos, color=gold, radius=7))
+                            # Chance to drop a special pickup
+                            if random.random() < SPECIAL_PICKUP_CHANCE:
+                                pickup_particles.append(PickupParticle(enemy.pos, color=SPECIAL_PICKUP_COLOR, radius=8, value=SPECIAL_PICKUP_VALUE))
+                            else:
+                                pickup_particles.append(PickupParticle(enemy.pos, color=gold, radius=7, value=1))
+                            
                             if enemy in enemies: enemies.remove(enemy) # Check if still exists
                         break # Particle can only hit one enemy
 
@@ -505,7 +515,7 @@ while running:
             for pickup in pickup_particles:
                 if (player_pos - pickup.pos).length_squared() < (player_radius + pickup.radius)**2:
                     if current_pickups_count < MAX_PICKUPS_FOR_FULL_BAR:
-                        current_pickups_count += 1
+                        current_pickups_count += pickup.value
                     if current_pickups_count >= MAX_PICKUPS_FOR_FULL_BAR and not store_active: # Check store_active again
                         player_level += 1 # Increment level when bar is full
                         store_active = True
