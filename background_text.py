@@ -37,8 +37,6 @@ def draw_ground():
     for x in range(15):
         screen.blit(ground_image, ((x * ground_width) - scroll * 2.2, SCREEN_HEIGHT - ground_height))
 
-
-
 # --- game loop ---
 run = True
 
@@ -56,7 +54,6 @@ while run:
     if keys[pygame.K_d] and scroll < 5000:
         scroll += 5
 
-
 # --- event handling ---
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -65,4 +62,3 @@ while run:
     pygame.display.update()
 
 pygame.quit()
-# --- create background text ---
