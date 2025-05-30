@@ -72,7 +72,6 @@ class Particle:
         return (self.pos.x < -self.radius or self.pos.x > screen_width + self.radius or
                 self.pos.y < -self.radius or self.pos.y > screen_height + self.radius)
 
-
 # --- Enemy Triangle Setup ---
 class EnemyTriangle:
     def __init__(self, screen_width, screen_height):
@@ -155,7 +154,6 @@ class SquareEnemy:
             return True # Destroyed
         return False # Still alive
 
-
 # --- Pickup Particle Setup ---
 class PickupParticle:
     def __init__(self, pos, color=gold, radius=7):
@@ -183,7 +181,6 @@ last_shot_time = 0.0
 # --- Player Variables ---
 INITIAL_MOVEMENT_SPEED = 200
 movement_speed = INITIAL_MOVEMENT_SPEED # Player movement speed, made global for upgrades
-
 
 # --- UI Bar Setup ---
 INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10 # Number of gold particles to collect to fill the bar
@@ -235,6 +232,7 @@ store_items = [
 continue_button_text = "Continue Game"
 continue_button_rect = None
 
+# --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
     global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed
@@ -257,6 +255,7 @@ def reset_game_state():
     game_over_active = False
     store_active = False
 
+# --- Draw Game Over Screen ---
 def draw_game_over_screen(surface, final_time_seconds):
     # Semi-transparent overlay
     overlay_color = pygame.Color(10, 10, 20, 200) # Dark semi-transparent
@@ -480,7 +479,7 @@ while running:
                     enemy_hitbox_radius_for_player = enemy.height * 0.4 
                 elif isinstance(enemy, SquareEnemy):
                     # For square, pos is the center. Radius is approx half diagonal.
-                    enemy_hitbox_radius_for_player = enemy.size * 0.7 # A bit more generous than 0.707
+                    enemy_hitbox_radius_for_player = enemy.size * 0.5 # Changed to 0.5 instead of 0.7
                 
                 if (player_pos - enemy.pos).length_squared() < (player_radius + enemy_hitbox_radius_for_player)**2:
                     game_over_active = True
