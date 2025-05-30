@@ -86,9 +86,9 @@ class EnemyTriangle:
         # Spawn on a random edge, with the tip (self.pos) starting off-screen
         edge = random.choice(["top", "bottom", "left", "right"])
         margin = self.height # Ensure it spawns fully off-screen
+        world_x, world_y = 0, 0 # Initialize for robustness
 
         if edge == "top":
-            self.pos = pygame.Vector2(random.uniform(0, screen_width), -margin)
             world_x = camera_world_tl_pos.x + random.uniform(0, screen_dims[0])
             world_y = camera_world_tl_pos.y - margin
         elif edge == "bottom":
@@ -198,19 +198,23 @@ last_shot_time = 0.0
 
 # --- Player Variables ---
 INITIAL_MOVEMENT_SPEED = 200
-movement_speed = INITIAL_MOVEMENT_SPEED # Player movement speed, made global for upgrades
+movement_speed = INITIAL_MOVEMENT_SPEED  # Player movement speed, made global for upgrades
+INITIAL_PLAYER_LEVEL = 1
+player_level = INITIAL_PLAYER_LEVEL
 
 # --- UI Bar Setup ---
-INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10 # Number of gold particles to collect to fill the bar
+INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10  # Number of gold particles to collect to fill the bar
 MAX_PICKUPS_FOR_FULL_BAR = INITIAL_MAX_PICKUPS_FOR_FULL_BAR
 
-BAR_HEIGHT = 25  # Height of the horizontal bar (pixels)
-BAR_MAX_WIDTH = 300 # Max width of the fillable bar
-BAR_X = screen.get_width() // 2 - BAR_MAX_WIDTH // 2 # Centered horizontally
-BAR_Y = 20 # Small margin from the top edge
-BAR_BG_COLOR = dark_slate_gray # Background color of the bar
-BAR_FILL_COLOR = gold # Color of the filling part of the bar
-current_pickups_count = 0 # How many pickups collected towards the current bar fill
+BAR_HEIGHT = 25   # Height of the horizontal bar (pixels)
+BAR_MAX_WIDTH = 300  # Max width of the fillable bar
+BAR_X = screen.get_width() // 2 - BAR_MAX_WIDTH // 2  # Centered horizontally
+BAR_Y = 20  # Small margin from the top edge
+BAR_BG_COLOR = dark_slate_gray  # Background color of the bar
+BAR_FILL_COLOR = gold  # Color of the filling part of the bar
+current_pickups_count = 0  # How many pickups collected towards the current bar fill
+LEVEL_TEXT_COLOR = white
+LEVEL_TEXT_OFFSET_X = 10 # Offset from the right of the bar for the level text
 
 # --- Store Setup ---
 store_active = False
@@ -253,8 +257,8 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset
-    global game_over_active, store_active, enemy_spawn_timer, last_shot_time
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, player_level
+    global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
     enemies.clear()
@@ -266,6 +270,7 @@ def reset_game_state():
     MAX_PICKUPS_FOR_FULL_BAR = INITIAL_MAX_PICKUPS_FOR_FULL_BAR
     SHOOT_COOLDOWN = INITIAL_SHOOT_COOLDOWN
     movement_speed = INITIAL_MOVEMENT_SPEED
+    player_level = INITIAL_PLAYER_LEVEL
 
     enemy_spawn_timer = 0.0
     last_shot_time = 0.0
@@ -502,6 +507,7 @@ while running:
                     if current_pickups_count < MAX_PICKUPS_FOR_FULL_BAR:
                         current_pickups_count += 1
                     if current_pickups_count >= MAX_PICKUPS_FOR_FULL_BAR and not store_active: # Check store_active again
+                        player_level += 1 # Increment level when bar is full
                         store_active = True
                         current_pickups_count = MAX_PICKUPS_FOR_FULL_BAR # Cap it
                 else:
@@ -566,6 +572,13 @@ while running:
         fill_ratio = min(current_pickups_count / MAX_PICKUPS_FOR_FULL_BAR, 1.0) if MAX_PICKUPS_FOR_FULL_BAR > 0 else 0
         actual_fill_width = fill_ratio * BAR_MAX_WIDTH
         pygame.draw.rect(screen, BAR_FILL_COLOR, (BAR_X, BAR_Y, actual_fill_width, BAR_HEIGHT))
+
+        # Draw Player Level
+        level_text_str = f"Level: {player_level}"
+        level_surf = ui_font.render(level_text_str, True, LEVEL_TEXT_COLOR)
+        # Position it to the right of the bar, vertically centered with the bar
+        level_rect = level_surf.get_rect(midleft=(BAR_X + BAR_MAX_WIDTH + LEVEL_TEXT_OFFSET_X, BAR_Y + BAR_HEIGHT / 2))
+        screen.blit(level_surf, level_rect)
 
         # Draw Game Timer (top right)
         minutes = int(total_game_time_seconds // 60)
