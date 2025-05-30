@@ -207,6 +207,61 @@ movement_speed = INITIAL_MOVEMENT_SPEED  # Player movement speed, made global fo
 INITIAL_PLAYER_LEVEL = 1
 player_level = INITIAL_PLAYER_LEVEL
 
+# --- Player Archetypes ---
+PLAYER_ARCHETYPES = [
+    {
+        "id": "standard",
+        "name": "Standard Issue",
+        "color": crimson,
+        "description": "Single shot",
+        "shoot_cooldown_modifier": 1.0,
+        "shoot_function_name": "shoot_standard"
+    },
+    {
+        "id": "triple_shot",
+        "name": "Spread Shot",
+        "color": medium_purple,
+        "description": "301",
+        "shoot_cooldown_modifier": 1.15, # Slightly longer base cooldown
+        "shoot_function_name": "shoot_triple"
+    },
+    {
+        "id": "nova_burst",
+        "name": "Nova Burst",
+        "color": teal,
+        "description": "Splosion",
+        "shoot_cooldown_modifier": 1.6, # Noticeably longer base cooldown
+        "shoot_function_name": "shoot_nova"
+    }
+]
+selected_player_archetype = None # Will hold the chosen dict from PLAYER_ARCHETYPES
+character_select_active = True # Start with character selection
+
+# --- Shooting Functions ---
+def shoot_standard(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
+    if not all_enemies: return
+    nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
+    particle_list.append(Particle(player_world_pos, nearest_enemy.pos, color=particle_color))
+
+def shoot_triple(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
+    if not all_enemies: return
+    nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
+    base_direction = (nearest_enemy.pos - player_world_pos).normalize() if (nearest_enemy.pos - player_world_pos).length_squared() > 0 else pygame.Vector2(0, -1)
+    for angle_offset in [-15, 0, 15]:
+        shot_direction = base_direction.rotate(angle_offset)
+        particle_list.append(Particle(player_world_pos, player_world_pos + shot_direction * 100, color=particle_color)) # Target is far point
+
+def shoot_nova(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
+    for i in range(8): # 8 projectiles
+        shot_direction = pygame.Vector2(1, 0).rotate(i * 45) # 360/8 = 45 degrees
+        particle_list.append(Particle(player_world_pos, player_world_pos + shot_direction * 100, color=particle_color))
+
+SHOOT_FUNCTIONS = {
+    "shoot_standard": shoot_standard,
+    "shoot_triple": shoot_triple,
+    "shoot_nova": shoot_nova,
+}
+
 # --- UI Bar Setup ---
 INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10  # Number of gold particles to collect to fill the bar
 MAX_PICKUPS_FOR_FULL_BAR = INITIAL_MAX_PICKUPS_FOR_FULL_BAR
@@ -262,7 +317,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, player_level
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
@@ -281,7 +336,7 @@ def reset_game_state():
     last_shot_time = 0.0
 
     game_over_active = False
-    store_active = False
+    store_active = False # character_select_active is handled separately
     
     # Reset camera based on player's starting position
     camera_offset.x = player_pos.x - screen.get_width() / 2
@@ -361,6 +416,59 @@ def draw_store_window(surface):
     continue_surf_rect = continue_surf.get_rect(center=continue_button_rect.center)
     surface.blit(continue_surf, continue_surf_rect)
 
+# --- Draw Character Selection Screen ---
+def draw_character_select_screen(surface):
+    global PLAYER_ARCHETYPES # To store rects for clicking
+    surface.fill(dark_blue) # Simple background for this screen
+
+    title_font = store_font_large # Reuse store font
+    desc_font = ui_font # Reuse UI font
+    
+    title_surf = title_font.render("CHOOSE YOUR VESSEL", True, white)
+    title_rect = title_surf.get_rect(center=(surface.get_width() / 2, 80))
+    surface.blit(title_surf, title_rect)
+
+    option_width = 300
+    option_height = 150 # Increased height for description
+    padding = 40
+    total_options_width = len(PLAYER_ARCHETYPES) * option_width + (len(PLAYER_ARCHETYPES) - 1) * padding
+    start_x = (surface.get_width() - total_options_width) / 2
+    current_y = surface.get_height() / 2 - option_height / 2
+
+    mouse_pos = pygame.mouse.get_pos()
+
+    for i, archetype in enumerate(PLAYER_ARCHETYPES):
+        option_x = start_x + i * (option_width + padding)
+        
+        rect = pygame.Rect(option_x, current_y, option_width, option_height)
+        archetype["rect"] = rect # Store for click detection
+
+        # Draw border and fill
+        border_color = STORE_BUTTON_HOVER_COLOR if rect.collidepoint(mouse_pos) else white
+        pygame.draw.rect(surface, steel_blue, rect, border_radius=10) # Background
+        pygame.draw.rect(surface, border_color, rect, width=3, border_radius=10) # Border
+
+        # Draw character representation (circle)
+        circle_radius = 20
+        circle_center_x = option_x + option_width / 2
+        circle_center_y = current_y + 40 # Position circle towards the top
+        pygame.draw.circle(surface, archetype["color"], (circle_center_x, circle_center_y), circle_radius)
+
+        # Draw name
+        name_surf = title_font.render(archetype["name"], True, white)
+        name_rect = name_surf.get_rect(center=(circle_center_x, circle_center_y + circle_radius + 25))
+        surface.blit(name_surf, name_rect)
+
+        # Draw description (simple, one line for now, can be improved with text wrapping)
+        desc_lines = archetype["description"].splitlines() # Basic split, can be more robust
+        line_y_offset = name_rect.bottom + 10
+        for line_idx, line_text in enumerate(desc_lines):
+            desc_surf = desc_font.render(line_text, True, light_sky_blue) # Smaller font for description
+            desc_rect = desc_surf.get_rect(center=(circle_center_x, line_y_offset + line_idx * (desc_font.get_height() + 2)))
+            surface.blit(desc_surf, desc_rect)
+
+
+
 while running:
     # dt is delta time in seconds since last frame, used for framerate-independent physics.
     dt = clock.tick(60) / 1000
@@ -370,12 +478,25 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-        if game_over_active:
+        if character_select_active:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.mouse.get_pos()
+                for archetype in PLAYER_ARCHETYPES:
+                    if archetype.get("rect") and archetype["rect"].collidepoint(mouse_pos):
+                        selected_player_archetype = archetype
+                        character_select_active = False
+                        game_over_active = False # Ensure it's false
+                        store_active = False     # Ensure it's false
+                        reset_game_state() # Initialize game with selected character
+                        print(f"Selected: {selected_player_archetype['name']}")
+                        break
+        elif game_over_active:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     running = False
                 elif event.key == pygame.K_r:
-                    reset_game_state()
+                    reset_game_state() # Restart with the same character
+                    game_over_active = False # Explicitly set game_over_active to False
         elif store_active: # Store is active, and game is not over
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # Left mouse button
                 mouse_pos = pygame.mouse.get_pos()
@@ -420,7 +541,7 @@ while running:
     color2 = BG_CYCLE_COLORS[next_bg_color_index]
     dynamic_bg_color = color1.lerp(color2, bg_color_transition_progress)
 
-    if not game_over_active:
+    if not game_over_active and not character_select_active: # Only run game logic if not game over and character selected
         if not store_active:
             # --- Active Gameplay Logic ---
             total_game_time_seconds += dt # Increment game timer
@@ -446,12 +567,16 @@ while running:
 
             # Shooting Logic
             current_time = pygame.time.get_ticks() / 1000.0
-            if keys[pygame.K_SPACE] and (current_time - last_shot_time > SHOOT_COOLDOWN) and enemies:
-                last_shot_time = current_time
-                nearest_enemy = min(enemies, key=lambda e: (e.pos - player_pos).length_squared())
-                if nearest_enemy: # Should always be true if enemies list is not empty
-                    particles.append(Particle(player_pos, nearest_enemy.pos, color=light_sky_blue))
+            if selected_player_archetype: # Ensure an archetype is selected
+                effective_shoot_cooldown = SHOOT_COOLDOWN * selected_player_archetype["shoot_cooldown_modifier"]
+                
+                # Allow shooting even if no enemies for Nova, for others require enemies
+                can_shoot_condition = enemies or selected_player_archetype["id"] == "nova_burst"
 
+                if keys[pygame.K_SPACE] and (current_time - last_shot_time > effective_shoot_cooldown) and can_shoot_condition:
+                    last_shot_time = current_time
+                    shoot_func = SHOOT_FUNCTIONS[selected_player_archetype["shoot_function_name"]]
+                    shoot_func(player_pos, enemies, particles, light_sky_blue, camera_offset)
             # Enemy Spawning
             enemy_spawn_timer += dt
             if enemy_spawn_timer >= ENEMY_SPAWN_INTERVAL and len(enemies) < MAX_ENEMIES:
@@ -552,9 +677,11 @@ while running:
     # --- Drawing ---
     screen.fill(dynamic_bg_color) # Always fill screen with current background
 
-    if game_over_active:
+    if character_select_active:
+        draw_character_select_screen(screen)
+    elif game_over_active:
         draw_game_over_screen(screen, total_game_time_seconds)
-    else: # Game is not over
+    else: # Game is active (could be gameplay or store)
         # Draw pickup particles (gold)
         for pickup in pickup_particles:
             pickup.draw(screen, camera_offset)
@@ -573,9 +700,9 @@ while running:
                     enemy.draw(screen, camera_offset)
         
         # Draw player
-        # Player is drawn at the center of the screen
         player_screen_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
-        pygame.draw.circle(screen, crimson, player_screen_pos, player_radius)
+        player_draw_color = selected_player_archetype["color"] if selected_player_archetype else crimson # Fallback
+        pygame.draw.circle(screen, player_draw_color, player_screen_pos, player_radius)
 
         # Draw UI Bar for pickups
         pygame.draw.rect(screen, BAR_BG_COLOR, (BAR_X, BAR_Y, BAR_MAX_WIDTH, BAR_HEIGHT))
