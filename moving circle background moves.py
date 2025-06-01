@@ -599,8 +599,8 @@ while running:
                 
                 # Allow shooting even if no enemies for Nova, for others require enemies
                 can_shoot_condition = enemies or selected_player_archetype["id"] == "nova_burst"
-
-                if keys[pygame.K_SPACE] and (current_time - last_shot_time > effective_shoot_cooldown) and can_shoot_condition:
+                # Removed keys[pygame.K_SPACE] check for automatic shooting
+                if (current_time - last_shot_time > effective_shoot_cooldown) and can_shoot_condition:
                     last_shot_time = current_time
                     shoot_func = SHOOT_FUNCTIONS[selected_player_archetype["shoot_function_name"]]
                     shoot_func(player_pos, enemies, particles, light_sky_blue, camera_offset)
