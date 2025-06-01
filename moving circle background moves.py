@@ -57,11 +57,12 @@ pickup_sound = None
 enemy_hit_sound = []
 player_death_sound = None
 select_archetype_sound = None
+standard_player_image = None # For player_1.png
 
 try:
     background_music_stage_1 = pygame.mixer.Sound("audio/background_music_stage_1.mp3") # Corrected filename
     if background_music_stage_1:
-        background_music_stage_1.set_volume(0.5) # Set volume to 50%
+        background_music_stage_1.set_volume(0.3) # Set volume to 50%
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
     nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
     triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
@@ -75,6 +76,7 @@ try:
     ]
     player_death_sound = pygame.mixer.Sound("audio/player_death.wav")
     select_archetype_sound = pygame.mixer.Sound("audio/select_player.wav")
+    standard_player_image = pygame.image.load("graphics/player_1.png").convert_alpha()
 except pygame.error as e:
     print(f"Error loading sound: {e}")
     pass # Variables remain None/empty if loading failed or a general error occurred.
@@ -531,21 +533,30 @@ def draw_character_select_screen(surface):
         pygame.draw.rect(surface, steel_blue, rect, border_radius=10) # Background
         pygame.draw.rect(surface, border_color, rect, width=3, border_radius=10) # Border
 
-        # Draw character representation (circle)
-        circle_radius = 20
         circle_center_x = option_x + option_width / 2
         circle_center_y = current_y + 40 # Position circle towards the top
-        pygame.draw.circle(surface, archetype["color"], (circle_center_x, circle_center_y), circle_radius)
+
+        visual_element_bottom_y = 0 # Initialize to store the y-coord for positioning text below
+
+        # Draw character representation
+        if archetype["id"] == "standard" and standard_player_image:
+            img_rect = standard_player_image.get_rect(center=(circle_center_x, circle_center_y))
+            surface.blit(standard_player_image, img_rect)
+            visual_element_bottom_y = img_rect.bottom
+        else: # Fallback to circle for other archetypes or if image fails to load
+            default_circle_radius = 20
+            pygame.draw.circle(surface, archetype["color"], (circle_center_x, circle_center_y), default_circle_radius)
+            visual_element_bottom_y = circle_center_y + default_circle_radius
 
         # Draw name
         name_surf = title_font.render(archetype["name"], True, white)
-        name_rect = name_surf.get_rect(center=(circle_center_x, circle_center_y + circle_radius + 25))
+        name_rect = name_surf.get_rect(center=(circle_center_x, visual_element_bottom_y + 25)) # Position below the visual
         surface.blit(name_surf, name_rect)
 
         # Draw description (simple, one line for now, can be improved with text wrapping)
         desc_lines = archetype["description"].splitlines() # Basic split, can be more robust
-        line_y_offset = name_rect.bottom + 10
-        for line_idx, line_text in enumerate(desc_lines):
+        line_y_offset = name_rect.bottom + 10 # Position description below the name
+        for line_idx, line_text in enumerate(desc_lines): # Ensure description is drawn below image/circle
             desc_surf = desc_font.render(line_text, True, light_sky_blue) # Smaller font for description
             desc_rect = desc_surf.get_rect(center=(circle_center_x, line_y_offset + line_idx * (desc_font.get_height() + 2)))
             surface.blit(desc_surf, desc_rect)
@@ -833,16 +844,27 @@ while running:
         
         # Draw player
         player_screen_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
-        player_draw_color = selected_player_archetype["color"] if selected_player_archetype else crimson # Fallback
-        pygame.draw.circle(screen, player_draw_color, player_screen_pos, player_radius)
+        drawn_player_bottom_y = player_screen_pos.y + player_radius # Default for circle
+
+        if selected_player_archetype and selected_player_archetype["id"] == "standard" and standard_player_image:
+            player_image_rect = standard_player_image.get_rect(center=player_screen_pos)
+            screen.blit(standard_player_image, player_image_rect)
+            drawn_player_bottom_y = player_image_rect.bottom
+        elif selected_player_archetype: # Other archetypes or fallback
+            player_draw_color = selected_player_archetype["color"]
+            pygame.draw.circle(screen, player_draw_color, player_screen_pos, player_radius)
+            # drawn_player_bottom_y remains as player_screen_pos.y + player_radius
+        else: # Fallback if no archetype selected (should not happen post-selection)
+            pygame.draw.circle(screen, crimson, player_screen_pos, player_radius)
+            # drawn_player_bottom_y remains as player_screen_pos.y + player_radius
 
         # Draw Player Health Bar (below player)
-        if current_player_health > 0 : # Only draw if alive
+        if current_player_health > 0: # Only draw if alive
             health_ratio = current_player_health / max_player_health if max_player_health > 0 else 0
             bar_fill_width = int(PLAYER_HEALTH_BAR_WIDTH * health_ratio)
             bar_x = player_screen_pos.x - PLAYER_HEALTH_BAR_WIDTH / 2
-            bar_y = player_screen_pos.y + player_radius + PLAYER_HEALTH_BAR_Y_OFFSET - PLAYER_HEALTH_BAR_HEIGHT / 2
-            
+            bar_y = drawn_player_bottom_y + PLAYER_HEALTH_BAR_Y_OFFSET - PLAYER_HEALTH_BAR_HEIGHT # Adjusted Y
+
             # Background of health bar (e.g., dark red or grey)
             pygame.draw.rect(screen, dark_slate_gray, (bar_x, bar_y, PLAYER_HEALTH_BAR_WIDTH, PLAYER_HEALTH_BAR_HEIGHT))
             # Fill of health bar (e.g., green or red)
