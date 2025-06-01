@@ -2,9 +2,11 @@
 import pygame
 import random
 import sys # For pygame.quit()
+import pygame.mixer
 
 # pygame setup
 pygame.init()
+pygame.mixer.init() # Initialize the mixer for sound effects
 screen = pygame.display.set_mode((1280, 720))
 clock = pygame.time.Clock()
 running = True
