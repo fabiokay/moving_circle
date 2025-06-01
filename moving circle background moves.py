@@ -47,6 +47,27 @@ bg_color_transition_progress = 0.0
 BG_COLOR_TRANSITION_SPEED = 0.02 # Speed of transition (0.02 means 50 seconds for a full cycle segment)
 dynamic_bg_color = BG_CYCLE_COLORS[current_bg_color_index]
 
+# --- Sound Effects ---
+try:
+    standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
+    pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
+    enemy_hit_sound = [
+        pygame.mixer.Sound("audio/enemy_hit1.wav"),
+        pygame.mixer.Sound("audio/enemy_hit2.wav"),
+        pygame.mixer.Sound("audio/enemy_hit3.wav"),
+        pygame.mixer.Sound("audio/enemy_hit4.wav"),
+    ]
+    player_death_sound = pygame.mixer.Sound("audio/player_death.wav")
+    select_archetype_sound = pygame.mixer.Sound("audio/select_player.wav")
+    # You can add more sounds here for other archetypes or events
+except pygame.error as e:
+    print(f"Error loading sound: {e}")
+    standard_shot_sound = None # Fallback if sound doesn't load
+    pickup_sound = None
+    enemy_hit_sound = [] # Fallback to empty list
+    player_death_sound = None
+    select_archetype_sound = None
+
 camera_offset = pygame.Vector2(0, 0) # Tracks the top-left of the camera in world coordinates
 player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
 player_radius = 10
@@ -213,7 +234,7 @@ player_level = INITIAL_PLAYER_LEVEL
 PLAYER_ARCHETYPES = [
     {
         "id": "standard",
-        "name": "Standard Issue",
+        "name": "Standard",
         "color": crimson,
         "description": "Single shot",
         "shoot_cooldown_modifier": 1.0,
@@ -221,7 +242,7 @@ PLAYER_ARCHETYPES = [
     },
     {
         "id": "triple_shot",
-        "name": "Spread Shot",
+        "name": "Spread",
         "color": medium_purple,
         "description": "301",
         "shoot_cooldown_modifier": 1.15, # Slightly longer base cooldown
@@ -229,7 +250,7 @@ PLAYER_ARCHETYPES = [
     },
     {
         "id": "nova_burst",
-        "name": "Nova Burst",
+        "name": "Burst",
         "color": teal,
         "description": "Splosion",
         "shoot_cooldown_modifier": 1.6, # Noticeably longer base cooldown
@@ -243,6 +264,8 @@ character_select_active = True # Start with character selection
 def shoot_standard(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
     if not all_enemies: return
     nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
+    if standard_shot_sound:
+        standard_shot_sound.play()
     particle_list.append(Particle(player_world_pos, nearest_enemy.pos, color=particle_color))
 
 def shoot_triple(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
@@ -486,6 +509,8 @@ while running:
                 for archetype in PLAYER_ARCHETYPES:
                     if archetype.get("rect") and archetype["rect"].collidepoint(mouse_pos):
                         selected_player_archetype = archetype
+                        if select_archetype_sound:
+                            select_archetype_sound.play()
                         character_select_active = False
                         game_over_active = False # Ensure it's false
                         store_active = False     # Ensure it's false
@@ -627,6 +652,8 @@ while running:
                     if (particle.pos - enemy.pos).length_squared() < (particle.radius + enemy_col_radius)**2:
                         if particle in particles: particles.remove(particle) # Check if still exists
                         destroyed = enemy.take_damage() if isinstance(enemy, SquareEnemy) else True
+                        if enemy_hit_sound and destroyed: # Play sound if destroyed and sounds are loaded
+                            random.choice(enemy_hit_sound).play()
                         if destroyed:
                             # Chance to drop a special pickup
                             if random.random() < SPECIAL_PICKUP_CHANCE:
@@ -641,6 +668,8 @@ while running:
             pickups_to_keep = []
             for pickup in pickup_particles:
                 if (player_pos - pickup.pos).length_squared() < (player_radius + pickup.radius)**2:
+                    if pickup_sound:
+                        pickup_sound.play()
                     if current_pickups_count < MAX_PICKUPS_FOR_FULL_BAR:
                         current_pickups_count += pickup.value
                     if current_pickups_count >= MAX_PICKUPS_FOR_FULL_BAR and not store_active: # Check store_active again
@@ -665,6 +694,8 @@ while running:
                     enemy_hitbox_radius_for_player = enemy.size * 0.5 # Changed to 0.5 instead of 0.7
                 
                 if (player_pos - enemy.pos).length_squared() < (player_radius + enemy_hitbox_radius_for_player)**2:
+                    if player_death_sound:
+                        player_death_sound.play()
                     game_over_active = True
                     store_active = False # Ensure store doesn't open if game over happens simultaneously
                     print(f"GAME OVER: Player collided with {type(enemy).__name__} at {enemy.pos}")
