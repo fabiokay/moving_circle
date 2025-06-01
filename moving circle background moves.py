@@ -47,11 +47,25 @@ bg_color_transition_progress = 0.0
 BG_COLOR_TRANSITION_SPEED = 0.02 # Speed of transition (0.02 means 50 seconds for a full cycle segment)
 dynamic_bg_color = BG_CYCLE_COLORS[current_bg_color_index]
 
-# --- Sound Effects ---
+# --- Sound Effects --- (Initialize all to None or empty for robust error handling)
+background_music_stage_1 = None
+standard_shot_sound = None
+nova_shot_sound = None
+triple_shot_sound = None
+damaging_aura_sound = None # Assuming this might be added or was from a previous step
+pickup_sound = None
+enemy_hit_sound = []
+player_death_sound = None
+select_archetype_sound = None
+
 try:
+    background_music_stage_1 = pygame.mixer.Sound("audio/background_music_stage_1.mp3") # Corrected filename
+    if background_music_stage_1:
+        background_music_stage_1.set_volume(0.5) # Set volume to 50%
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
     nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
     triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
+    # damaging_aura_sound = pygame.mixer.Sound("audio/damaging_aura.wav") # Example if you have it
     pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
     enemy_hit_sound = [
         pygame.mixer.Sound("audio/enemy_hit1.wav"),
@@ -61,19 +75,13 @@ try:
     ]
     player_death_sound = pygame.mixer.Sound("audio/player_death.wav")
     select_archetype_sound = pygame.mixer.Sound("audio/select_player.wav")
-    # You can add more sounds here for other archetypes or events
 except pygame.error as e:
     print(f"Error loading sound: {e}")
-    standard_shot_sound = None # Fallback if sound doesn't load
-    nova_shot_sound = None # Fallback if sound doesn't load
-    pickup_sound = None
-    enemy_hit_sound = [] # Fallback to empty list
-    player_death_sound = None
-    select_archetype_sound = None
+    pass # Variables remain None/empty if loading failed or a general error occurred.
 
 # --- Static Background Image ---
 try:
-    static_background_image = pygame.image.load("graphics/background.png").convert_alpha()
+    static_background_image = pygame.image.load("graphics/background.jpg").convert_alpha()
     # If your image doesn't have alpha, you can use .convert() instead
 except pygame.error as e:
     print(f"Error loading static background image: {e}")
@@ -378,6 +386,10 @@ def reset_game_state():
     global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
+    # Stop any currently playing background music first to avoid overlap on restart
+    if background_music_stage_1:
+        background_music_stage_1.stop()
+
     # Calculate world center if map exists, otherwise screen center
     if TILE_WIDTH > 0 and TILE_HEIGHT > 0:
         world_pixel_width = WORLD_TILES_X * TILE_WIDTH
@@ -408,6 +420,10 @@ def reset_game_state():
     # Reset camera based on player's starting position
     camera_offset.x = player_pos.x - screen.get_width() / 2
     camera_offset.y = player_pos.y - screen.get_height() / 2
+
+    # Start background music for the stage if loaded
+    if background_music_stage_1:
+        background_music_stage_1.play(loops=-1) # Play indefinitely
 
 # --- Draw Game Over Screen ---
 def draw_game_over_screen(surface, final_time_seconds):
