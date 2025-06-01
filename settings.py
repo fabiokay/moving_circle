@@ -1,0 +1,90 @@
+# settings.py
+# This file contains all the settings for the game.
+import pygame
+
+# --- Screen ---
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+FPS = 60
+
+# --- Colors ---
+BLACK = pygame.Color("#141728")
+GREY  = pygame.Color("#727880")
+VIOLET = pygame.Color("#5C3A93")
+PETROL = pygame.Color("#387487")
+BLUE = pygame.Color("#59C3C3")
+WHITE = pygame.Color("#EBEBEB")
+PINK = pygame.Color("#D154CA")
+DARK_SLATE_GRAY = pygame.Color("#2F4F4F")
+STEEL_BLUE = pygame.Color("#4682B4")
+OLIVE_DRAB = pygame.Color("#6B8E23")
+CORAL = pygame.Color("#FF7F50")
+KHAKI = pygame.Color("#994C2C")
+TEAL = pygame.Color("#008080")
+MEDIUM_PURPLE = pygame.Color("#9370DB")
+DARK_SEA_GREEN = pygame.Color("#8FBC8F")
+LIGHT_SKY_BLUE = pygame.Color("#87CEFA")
+CRIMSON = pygame.Color("#740B20")
+GOLD = pygame.Color("#FFF200") # For pickup particles
+DARK_BLUE = pygame.Color("#00008B") # For store background
+
+# --- Background Color Cycling ---
+BG_CYCLE_COLORS = [
+    BLACK,
+    DARK_SLATE_GRAY,
+    PETROL,
+    DARK_BLUE,
+    VIOLET,
+]
+BG_COLOR_TRANSITION_SPEED = 0.02
+
+# --- Player ---
+PLAYER_RADIUS = 15
+INITIAL_MOVEMENT_SPEED = 200
+INITIAL_PLAYER_LEVEL = 1
+INITIAL_PLAYER_HEALTH = 10
+PLAYER_HEALTH_BAR_WIDTH = 40 # Or perhaps player_radius * 2.5
+PLAYER_HEALTH_BAR_HEIGHT = 6
+PLAYER_HEALTH_BAR_Y_OFFSET = 15
+
+# --- Shooting ---
+INITIAL_SHOOT_COOLDOWN = 1.0
+
+# --- Enemies ---
+ENEMY_SPAWN_INTERVAL = 1.5
+MAX_ENEMIES = 50
+SQUARE_GROUP_SIZE_MIN = 2
+SQUARE_GROUP_SIZE_MAX = 4
+
+# --- Pickups ---
+SPECIAL_PICKUP_CHANCE = 0.15
+SPECIAL_PICKUP_COLOR = PINK
+SPECIAL_PICKUP_VALUE = 2
+INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10
+
+# --- UI Bar ---
+BAR_HEIGHT = 25
+BAR_MAX_WIDTH = 300
+# BAR_X will be calculated in main based on screen width
+# BAR_Y = 20 (already defined in main, can be moved here)
+BAR_BG_COLOR = DARK_SLATE_GRAY
+BAR_FILL_COLOR = GOLD
+LEVEL_TEXT_COLOR = WHITE
+LEVEL_TEXT_OFFSET_X = 10
+
+# --- Store ---
+STORE_BG_COLOR = DARK_BLUE
+STORE_TEXT_COLOR = WHITE
+STORE_BUTTON_COLOR = STEEL_BLUE
+STORE_BUTTON_HOVER_COLOR = LIGHT_SKY_BLUE
+
+# --- World/Map ---
+WORLD_TILES_X = 5
+WORLD_TILES_Y = 5
+
+# --- Asset Paths (example) ---
+FONT_DEFAULT_PATH = None # For pygame.font.Font(None, size)
+SOUND_BG_MUSIC_PATH = "audio/background_music_stage_1.mp3"
+IMAGE_PLAYER_PATH = "graphics/player_1.png"
+IMAGE_BACKGROUND_PATH = "graphics/background_stage_1.png"
+# ... other asset paths

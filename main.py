@@ -3,53 +3,25 @@ import pygame
 import random
 import sys # For pygame.quit()
 import pygame.mixer
+import settings # Import your new settings file
 
 # pygame setup
 pygame.init()
 pygame.mixer.init() # Initialize the mixer for sound effects
-screen = pygame.display.set_mode((1280, 720))
+screen = pygame.display.set_mode((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
 clock = pygame.time.Clock()
 running = True
 dt = 0
 
-# --- Colors ---
-black = pygame.Color("#141728")
-grey  = pygame.Color("#727880") 
-violet = pygame.Color("#5C3A93")
-petrol = pygame.Color("#387487")
-blue = pygame.Color("#59C3C3")
-white = pygame.Color("#EBEBEB")
-pink = pygame.Color("#D154CA")
-dark_slate_gray = pygame.Color("#2F4F4F")
-steel_blue = pygame.Color("#4682B4")
-olive_drab = pygame.Color("#6B8E23")
-coral = pygame.Color("#FF7F50")
-khaki = pygame.Color("#994C2C")
-teal = pygame.Color("#008080")
-medium_purple = pygame.Color("#9370DB")
-dark_sea_green = pygame.Color("#8FBC8F")
-light_sky_blue = pygame.Color("#87CEFA")
-crimson = pygame.Color("#740B20")
-gold = pygame.Color("#FFF200") # For pickup particles
-dark_blue = pygame.Color("#00008B") # For store background
-
 # --- Background Color Cycling ---
-BG_CYCLE_COLORS = [
-    pygame.Color("#141728"), # Initial black
-    pygame.Color("#2F4F4F"), # dark_slate_gray
-    petrol,
-    pygame.Color("#00008B"), # dark_blue (used in store, good for a darker phase)
-    violet,
-]
 current_bg_color_index = 0
 next_bg_color_index = 1
 bg_color_transition_progress = 0.0
-BG_COLOR_TRANSITION_SPEED = 0.02 # Speed of transition (0.02 means 50 seconds for a full cycle segment)
-dynamic_bg_color = BG_CYCLE_COLORS[current_bg_color_index]
+dynamic_bg_color = settings.BG_CYCLE_COLORS[current_bg_color_index]
 
 # --- Player Size ---
 # Define player_radius here so it can be used for scaling the image if needed
-player_radius = 15 # Example: Set desired radius. Was 20, changing to 10 for smaller sprite.
+player_radius = settings.PLAYER_RADIUS
 
 # --- Sound Effects --- (Initialize all to None or empty for robust error handling)
 background_music_stage_1 = None
@@ -64,7 +36,7 @@ select_archetype_sound = None
 standard_player_image = None # For player_1.png
 
 try:
-    background_music_stage_1 = pygame.mixer.Sound("audio/background_music_stage_1.mp3") # Corrected filename
+    background_music_stage_1 = pygame.mixer.Sound(settings.SOUND_BG_MUSIC_PATH)
     if background_music_stage_1:
         background_music_stage_1.set_volume(0.1) # Set volume to 50%
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
@@ -80,7 +52,7 @@ try:
     ]
     player_death_sound = pygame.mixer.Sound("audio/player_death.wav")
     select_archetype_sound = pygame.mixer.Sound("audio/select_player.wav")
-    _original_player_image = pygame.image.load("graphics/player_1.png").convert_alpha()
+    _original_player_image = pygame.image.load(settings.IMAGE_PLAYER_PATH).convert_alpha()
     if _original_player_image: # Scale it if loaded successfully
         standard_player_image = pygame.transform.smoothscale(_original_player_image, (player_radius * 2, player_radius * 2))
 except pygame.error as e:
@@ -89,15 +61,15 @@ except pygame.error as e:
 
 # --- Static Background Image ---
 try:
-    static_background_image = pygame.image.load("graphics/background_stage_1.png").convert_alpha()
+    static_background_image = pygame.image.load(settings.IMAGE_BACKGROUND_PATH).convert_alpha()
     # If your image doesn't have alpha, you can use .convert() instead
 except pygame.error as e:
     print(f"Error loading static background image: {e}")
     static_background_image = None # Fallback if image doesn't load
 
 # --- World/Map Definition ---
-WORLD_TILES_X = 5  # How many background tiles wide the world is
-WORLD_TILES_Y = 5  # How many background tiles high the world is
+WORLD_TILES_X = settings.WORLD_TILES_X
+WORLD_TILES_Y = settings.WORLD_TILES_Y
 TILE_WIDTH = 0
 TILE_HEIGHT = 0
 if static_background_image:
@@ -109,7 +81,7 @@ player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
 
 # --- Particle shoot Setup ---
 class Particle:
-    def __init__(self, start_pos, target_pos, color=white, speed=250, radius=4):
+    def __init__(self, start_pos, target_pos, color=settings.WHITE, speed=250, radius=4):
         # Ensure start_pos is a Vector2. If it's a tuple/list, convert it.
         self.pos = pygame.Vector2(start_pos)
         self.radius = radius
@@ -139,7 +111,7 @@ class EnemyTriangle:
         self.height = 20  # Length from tip to middle of base
         self.base_width = 15  # Full width of the base
         self.speed = random.uniform(70, 110)  # Pixels per second
-        self.color = olive_drab
+        self.color = settings.OLIVE_DRAB
         self.collision_radius = self.height * 0.75 # Radius for enemy-enemy collision
 
         # Spawn on a random edge, with the tip (self.pos) starting off-screen
@@ -199,8 +171,8 @@ class SquareEnemy:
             self.speed = random.uniform(60, 100)
         else:
             self.speed = speed
-        self.initial_color = steel_blue
-        self.damaged_color = grey
+        self.initial_color = settings.STEEL_BLUE
+        self.damaged_color = settings.GREY
         self.color = self.initial_color
         self.health = 2
         self.max_health = 2 # Store max health for potential future use (e.g. health bars)
@@ -233,7 +205,7 @@ class SquareEnemy:
 
 # --- Pickup Particle Setup ---
 class PickupParticle:
-    def __init__(self, pos, color=gold, radius=7, value=1):
+    def __init__(self, pos, color=settings.GOLD, radius=7, value=1):
         self.pos = pygame.Vector2(pos) # Position where it's dropped
         self.radius = radius
         self.color = color
@@ -247,40 +219,37 @@ class PickupParticle:
 # --- Enemy Variables ---
 enemies = []
 enemy_spawn_timer = 0.0
-ENEMY_SPAWN_INTERVAL = 1.5  # Seconds between spawns
-MAX_ENEMIES = 50 # Maximum number of enemies on screen (reduced a bit due to groups)
-SQUARE_GROUP_SIZE_MIN = 2
-SQUARE_GROUP_SIZE_MAX = 4
+ENEMY_SPAWN_INTERVAL = settings.ENEMY_SPAWN_INTERVAL
+MAX_ENEMIES = settings.MAX_ENEMIES
+SQUARE_GROUP_SIZE_MIN = settings.SQUARE_GROUP_SIZE_MIN
+SQUARE_GROUP_SIZE_MAX = settings.SQUARE_GROUP_SIZE_MAX
 pickup_particles = [] # List to store pickup particles
-SPECIAL_PICKUP_CHANCE = 0.15 # 15% chance for a special pickup
-SPECIAL_PICKUP_COLOR = pink # Color for special, more valuable pickups
-SPECIAL_PICKUP_VALUE = 2
+SPECIAL_PICKUP_CHANCE = settings.SPECIAL_PICKUP_CHANCE
+SPECIAL_PICKUP_COLOR = settings.PINK
+SPECIAL_PICKUP_VALUE = settings.SPECIAL_PICKUP_VALUE
 
 # --- Shooting Variables
 particles = []
-SHOOT_COOLDOWN = 1.0  # Seconds
+# SHOOT_COOLDOWN will be initialized from settings.INITIAL_SHOOT_COOLDOWN
 last_shot_time = 0.0
 
 # --- Player Variables ---
-INITIAL_MOVEMENT_SPEED = 200
-movement_speed = INITIAL_MOVEMENT_SPEED  # Player movement speed, made global for upgrades
-INITIAL_PLAYER_LEVEL = 1
-player_level = INITIAL_PLAYER_LEVEL
-INITIAL_PLAYER_HEALTH = 10
-max_player_health = INITIAL_PLAYER_HEALTH # Max health can be upgraded
-current_player_health = INITIAL_PLAYER_HEALTH
+movement_speed = settings.INITIAL_MOVEMENT_SPEED  # Player movement speed, made global for upgrades
+player_level = settings.INITIAL_PLAYER_LEVEL
+max_player_health = settings.INITIAL_PLAYER_HEALTH # Max health can be upgraded
+current_player_health = settings.INITIAL_PLAYER_HEALTH
 
 # --- Player Health Bar UI ---
-PLAYER_HEALTH_BAR_WIDTH = 40
-PLAYER_HEALTH_BAR_HEIGHT = 6
-PLAYER_HEALTH_BAR_Y_OFFSET = 15 # How far below the player circle's center
+PLAYER_HEALTH_BAR_WIDTH = settings.PLAYER_HEALTH_BAR_WIDTH
+PLAYER_HEALTH_BAR_HEIGHT = settings.PLAYER_HEALTH_BAR_HEIGHT
+PLAYER_HEALTH_BAR_Y_OFFSET = settings.PLAYER_HEALTH_BAR_Y_OFFSET
 
 # --- Player Archetypes ---
 PLAYER_ARCHETYPES = [
     {
         "id": "standard",
         "name": "Standard",
-        "color": crimson,
+        "color": settings.CRIMSON,
         "description": "Single shot",
         "shoot_cooldown_modifier": 1.0,
         "shoot_function_name": "shoot_standard"
@@ -288,7 +257,7 @@ PLAYER_ARCHETYPES = [
     {
         "id": "triple_shot",
         "name": "Spread",
-        "color": medium_purple,
+        "color": settings.MEDIUM_PURPLE,
         "description": "301",
         "shoot_cooldown_modifier": 1.15, # Slightly longer base cooldown
         "shoot_function_name": "shoot_triple"
@@ -296,7 +265,7 @@ PLAYER_ARCHETYPES = [
     {
         "id": "nova_burst",
         "name": "Burst",
-        "color": teal,
+        "color": settings.TEAL,
         "description": "Splosion",
         "shoot_cooldown_modifier": 1.6, # Noticeably longer base cooldown
         "shoot_function_name": "shoot_nova"
@@ -337,28 +306,26 @@ SHOOT_FUNCTIONS = {
 }
 
 # --- UI Bar Setup ---
-INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10  # Number of gold particles to collect to fill the bar
-MAX_PICKUPS_FOR_FULL_BAR = INITIAL_MAX_PICKUPS_FOR_FULL_BAR
+MAX_PICKUPS_FOR_FULL_BAR = settings.INITIAL_MAX_PICKUPS_FOR_FULL_BAR
 
-BAR_HEIGHT = 25   # Height of the horizontal bar (pixels)
-BAR_MAX_WIDTH = 300  # Max width of the fillable bar
-BAR_X = screen.get_width() // 2 - BAR_MAX_WIDTH // 2  # Centered horizontally
+BAR_HEIGHT = settings.BAR_HEIGHT
+BAR_MAX_WIDTH = settings.BAR_MAX_WIDTH
+BAR_X = screen.get_width() // 2 - BAR_MAX_WIDTH // 2
 BAR_Y = 20  # Small margin from the top edge
-BAR_BG_COLOR = dark_slate_gray  # Background color of the bar
-BAR_FILL_COLOR = gold  # Color of the filling part of the bar
+BAR_BG_COLOR = settings.DARK_SLATE_GRAY
+BAR_FILL_COLOR = settings.GOLD
 current_pickups_count = 0  # How many pickups collected towards the current bar fill
-LEVEL_TEXT_COLOR = white
-LEVEL_TEXT_OFFSET_X = 10 # Offset from the right of the bar for the level text
+LEVEL_TEXT_COLOR = settings.WHITE
+LEVEL_TEXT_OFFSET_X = settings.LEVEL_TEXT_OFFSET_X
 
 # --- Store Setup ---
 store_active = False
-STORE_BG_COLOR = dark_blue
-STORE_TEXT_COLOR = white
-STORE_BUTTON_COLOR = steel_blue
+STORE_BG_COLOR = settings.STORE_BG_COLOR
+STORE_TEXT_COLOR = settings.STORE_TEXT_COLOR
+STORE_BUTTON_COLOR = settings.STORE_BUTTON_COLOR
 
-INITIAL_SHOOT_COOLDOWN = 1.0
-SHOOT_COOLDOWN = INITIAL_SHOOT_COOLDOWN # Seconds
-STORE_BUTTON_HOVER_COLOR = light_sky_blue
+SHOOT_COOLDOWN = settings.INITIAL_SHOOT_COOLDOWN # Seconds
+STORE_BUTTON_HOVER_COLOR = settings.LIGHT_SKY_BLUE
 
 # --- Game Timer ---
 total_game_time_seconds = 0.0
@@ -370,13 +337,13 @@ game_over_font_large = None # For "GAME OVER" text
 # ui_font (store_font_medium) will be used for smaller game over text like score
 
 try:
-    store_font_large = pygame.font.Font(None, 48) # For title
-    store_font_medium = pygame.font.Font(None, 36) # For buttons/text
+    store_font_large = pygame.font.Font(settings.FONT_DEFAULT_PATH, 48) # For title
+    store_font_medium = pygame.font.Font(settings.FONT_DEFAULT_PATH, 36) # For buttons/text
     game_over_font_large = pygame.font.Font(None, 96) # Larger font for "GAME OVER"
 except pygame.error as e:
     print(f"Font loading error: {e}. Using default system font.")
-    store_font_large = pygame.font.SysFont(None, 48)
-    store_font_medium = pygame.font.SysFont(None, 36)
+    store_font_large = pygame.font.SysFont(settings.FONT_DEFAULT_PATH, 48)
+    store_font_medium = pygame.font.SysFont(settings.FONT_DEFAULT_PATH, 36)
     game_over_font_large = pygame.font.SysFont(None, 96)
 ui_font = store_font_medium # Use the medium font for UI elements like the timer
 
@@ -413,12 +380,12 @@ def reset_game_state():
 
     total_game_time_seconds = 0.0
     current_pickups_count = 0
-    MAX_PICKUPS_FOR_FULL_BAR = INITIAL_MAX_PICKUPS_FOR_FULL_BAR
-    SHOOT_COOLDOWN = INITIAL_SHOOT_COOLDOWN
-    movement_speed = INITIAL_MOVEMENT_SPEED
-    player_level = INITIAL_PLAYER_LEVEL
-    max_player_health = INITIAL_PLAYER_HEALTH # Reset max health to initial
-    current_player_health = max_player_health # Fill health to current max
+    MAX_PICKUPS_FOR_FULL_BAR = settings.INITIAL_MAX_PICKUPS_FOR_FULL_BAR
+    SHOOT_COOLDOWN = settings.INITIAL_SHOOT_COOLDOWN
+    movement_speed = settings.INITIAL_MOVEMENT_SPEED
+    player_level = settings.INITIAL_PLAYER_LEVEL
+    max_player_health = settings.INITIAL_PLAYER_HEALTH
+    current_player_health = max_player_health
 
     enemy_spawn_timer = 0.0
     last_shot_time = 0.0
@@ -443,7 +410,7 @@ def draw_game_over_screen(surface, final_time_seconds):
     surface.blit(overlay_surface, (0, 0))
 
     # "GAME OVER" Text
-    game_over_text_surf = game_over_font_large.render("GAME OVER", True, crimson)
+    game_over_text_surf = game_over_font_large.render("GAME OVER", True, settings.CRIMSON)
     game_over_text_rect = game_over_text_surf.get_rect(center=(surface.get_width() / 2, surface.get_height() / 3))
     surface.blit(game_over_text_surf, game_over_text_rect)
 
@@ -451,7 +418,7 @@ def draw_game_over_screen(surface, final_time_seconds):
     minutes = int(final_time_seconds // 60)
     seconds = int(final_time_seconds % 60)
     time_str = f"Time Survived: {minutes:02}:{seconds:02}"
-    score_surf = ui_font.render(time_str, True, white) # ui_font is store_font_medium
+    score_surf = ui_font.render(time_str, True, settings.WHITE) # ui_font is store_font_medium
     score_rect = score_surf.get_rect(center=(surface.get_width() / 2, game_over_text_rect.bottom + 60))
     surface.blit(score_surf, score_rect)
 
@@ -459,10 +426,10 @@ def draw_game_over_screen(surface, final_time_seconds):
     quit_text = "Press 'Q' to Quit"
     restart_text = "Press 'R' to Restart"
 
-    quit_surf = ui_font.render(quit_text, True, grey)
+    quit_surf = ui_font.render(quit_text, True, settings.GREY)
     quit_rect = quit_surf.get_rect(center=(surface.get_width() / 2, score_rect.bottom + 40))
     surface.blit(quit_surf, quit_rect)
-    restart_surf = ui_font.render(restart_text, True, grey)
+    restart_surf = ui_font.render(restart_text, True, settings.GREY)
     restart_rect = restart_surf.get_rect(center=(surface.get_width() / 2, quit_rect.bottom + 30))
     surface.blit(restart_surf, restart_rect)
 
@@ -475,7 +442,7 @@ def draw_store_window(surface):
 
     # Draw background
     pygame.draw.rect(surface, STORE_BG_COLOR, (store_x, store_y, store_width, store_height), border_radius=10)
-    pygame.draw.rect(surface, white, (store_x, store_y, store_width, store_height), width=2, border_radius=10) # Border
+    pygame.draw.rect(surface, settings.WHITE, (store_x, store_y, store_width, store_height), width=2, border_radius=10) # Border
 
     # Title
     title_surf = store_font_large.render("UPGRADE STORE", True, STORE_TEXT_COLOR)
@@ -511,12 +478,12 @@ def draw_store_window(surface):
 # --- Draw Character Selection Screen ---
 def draw_character_select_screen(surface):
     global PLAYER_ARCHETYPES # To store rects for clicking
-    surface.fill(dark_blue) # Simple background for this screen
+    surface.fill(settings.DARK_BLUE) # Simple background for this screen
 
     title_font = store_font_large # Reuse store font
     desc_font = ui_font # Reuse UI font
     
-    title_surf = title_font.render("CHOOSE YOUR VESSEL", True, white)
+    title_surf = title_font.render("CHOOSE YOUR VESSEL", True, settings.WHITE)
     title_rect = title_surf.get_rect(center=(surface.get_width() / 2, 80))
     surface.blit(title_surf, title_rect)
 
@@ -536,8 +503,8 @@ def draw_character_select_screen(surface):
         archetype["rect"] = rect # Store for click detection
 
         # Draw border and fill
-        border_color = STORE_BUTTON_HOVER_COLOR if rect.collidepoint(mouse_pos) else white
-        pygame.draw.rect(surface, steel_blue, rect, border_radius=10) # Background
+        border_color = STORE_BUTTON_HOVER_COLOR if rect.collidepoint(mouse_pos) else settings.WHITE
+        pygame.draw.rect(surface, settings.STEEL_BLUE, rect, border_radius=10) # Background
         pygame.draw.rect(surface, border_color, rect, width=3, border_radius=10) # Border
 
         circle_center_x = option_x + option_width / 2
@@ -556,7 +523,7 @@ def draw_character_select_screen(surface):
             visual_element_bottom_y = circle_center_y + default_circle_radius
 
         # Draw name
-        name_surf = title_font.render(archetype["name"], True, white)
+        name_surf = title_font.render(archetype["name"], True, settings.WHITE)
         name_rect = name_surf.get_rect(center=(circle_center_x, visual_element_bottom_y + 25)) # Position below the visual
         surface.blit(name_surf, name_rect)
 
@@ -564,7 +531,7 @@ def draw_character_select_screen(surface):
         desc_lines = archetype["description"].splitlines() # Basic split, can be more robust
         line_y_offset = name_rect.bottom + 10 # Position description below the name
         for line_idx, line_text in enumerate(desc_lines): # Ensure description is drawn below image/circle
-            desc_surf = desc_font.render(line_text, True, light_sky_blue) # Smaller font for description
+            desc_surf = desc_font.render(line_text, True, settings.LIGHT_SKY_BLUE) # Smaller font for description
             desc_rect = desc_surf.get_rect(center=(circle_center_x, line_y_offset + line_idx * (desc_font.get_height() + 2)))
             surface.blit(desc_surf, desc_rect)
 
@@ -572,7 +539,7 @@ def draw_character_select_screen(surface):
 
 while running:
     # dt is delta time in seconds since last frame, used for framerate-independent physics.
-    dt = clock.tick(60) / 1000
+    dt = clock.tick(settings.FPS) / 1000
 
     # --- Event Handling ---
     for event in pygame.event.get():
@@ -637,15 +604,15 @@ while running:
 
     # --- Game State Updates ---
     # Background color transition (always active, even on game over screen for effect)
-    bg_color_transition_progress += BG_COLOR_TRANSITION_SPEED * dt
+    bg_color_transition_progress += settings.BG_COLOR_TRANSITION_SPEED * dt
     if bg_color_transition_progress >= 1.0:
         bg_color_transition_progress = 0.0 # Reset progress
         current_bg_color_index = next_bg_color_index
-        next_bg_color_index = (next_bg_color_index + 1) % len(BG_CYCLE_COLORS)
+        next_bg_color_index = (next_bg_color_index + 1) % len(settings.BG_CYCLE_COLORS)
 
     # Interpolate between the current and next background color
-    color1 = BG_CYCLE_COLORS[current_bg_color_index]
-    color2 = BG_CYCLE_COLORS[next_bg_color_index]
+    color1 = settings.BG_CYCLE_COLORS[current_bg_color_index]
+    color2 = settings.BG_CYCLE_COLORS[next_bg_color_index]
     dynamic_bg_color = color1.lerp(color2, bg_color_transition_progress)
 
     if not game_over_active and not character_select_active: # Only run game logic if not game over and character selected
@@ -694,7 +661,7 @@ while running:
                 if (current_time - last_shot_time > effective_shoot_cooldown) and can_shoot_condition:
                     last_shot_time = current_time
                     shoot_func = SHOOT_FUNCTIONS[selected_player_archetype["shoot_function_name"]]
-                    shoot_func(player_pos, enemies, particles, light_sky_blue, camera_offset)
+                    shoot_func(player_pos, enemies, particles, settings.LIGHT_SKY_BLUE, camera_offset)
             # Enemy Spawning
             enemy_spawn_timer += dt
             if enemy_spawn_timer >= ENEMY_SPAWN_INTERVAL and len(enemies) < MAX_ENEMIES:
@@ -769,9 +736,9 @@ while running:
                         if destroyed:
                             # Chance to drop a special pickup
                             if random.random() < SPECIAL_PICKUP_CHANCE:
-                                pickup_particles.append(PickupParticle(enemy.pos, color=SPECIAL_PICKUP_COLOR, radius=8, value=SPECIAL_PICKUP_VALUE))
+                                pickup_particles.append(PickupParticle(enemy.pos, color=settings.SPECIAL_PICKUP_COLOR, radius=8, value=settings.SPECIAL_PICKUP_VALUE))
                             else:
-                                pickup_particles.append(PickupParticle(enemy.pos, color=gold, radius=7, value=1))
+                                pickup_particles.append(PickupParticle(enemy.pos, color=settings.GOLD, radius=7, value=1))
                             
                             if enemy in enemies: enemies.remove(enemy) # Check if still exists
                         break # Particle can only hit one enemy
@@ -883,7 +850,7 @@ while running:
             pygame.draw.circle(screen, player_draw_color, player_screen_pos, player_radius)
             # drawn_player_bottom_y remains as player_screen_pos.y + player_radius
         else: # Fallback if no archetype selected (should not happen post-selection)
-            pygame.draw.circle(screen, crimson, player_screen_pos, player_radius)
+            pygame.draw.circle(screen, settings.CRIMSON, player_screen_pos, player_radius)
             # drawn_player_bottom_y remains as player_screen_pos.y + player_radius
 
         # Draw Player Health Bar (below player)
@@ -894,9 +861,9 @@ while running:
             bar_y = drawn_player_bottom_y + PLAYER_HEALTH_BAR_Y_OFFSET - PLAYER_HEALTH_BAR_HEIGHT # Adjusted Y
 
             # Background of health bar (e.g., dark red or grey)
-            pygame.draw.rect(screen, dark_slate_gray, (bar_x, bar_y, PLAYER_HEALTH_BAR_WIDTH, PLAYER_HEALTH_BAR_HEIGHT))
+            pygame.draw.rect(screen, settings.DARK_SLATE_GRAY, (bar_x, bar_y, PLAYER_HEALTH_BAR_WIDTH, PLAYER_HEALTH_BAR_HEIGHT))
             # Fill of health bar (e.g., green or red)
-            pygame.draw.rect(screen, dark_sea_green, (bar_x, bar_y, bar_fill_width, PLAYER_HEALTH_BAR_HEIGHT))
+            pygame.draw.rect(screen, settings.DARK_SEA_GREEN, (bar_x, bar_y, bar_fill_width, PLAYER_HEALTH_BAR_HEIGHT))
 
         # Draw UI Bar for pickups
         pygame.draw.rect(screen, BAR_BG_COLOR, (BAR_X, BAR_Y, BAR_MAX_WIDTH, BAR_HEIGHT))
@@ -915,7 +882,7 @@ while running:
         minutes = int(total_game_time_seconds // 60)
         seconds = int(total_game_time_seconds % 60)
         timer_text = f"{minutes:02}:{seconds:02}"
-        timer_surf = ui_font.render(timer_text, True, white)
+        timer_surf = ui_font.render(timer_text, True, settings.WHITE)
         timer_rect = timer_surf.get_rect(topright=(screen.get_width() - 20, 20))
         screen.blit(timer_surf, timer_rect)
 
