@@ -51,6 +51,7 @@ dynamic_bg_color = BG_CYCLE_COLORS[current_bg_color_index]
 try:
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
     nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
+    triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
     pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
     enemy_hit_sound = [
         pygame.mixer.Sound("audio/enemy_hit1.wav"),
@@ -297,6 +298,8 @@ def shoot_standard(player_world_pos, all_enemies, particle_list, particle_color,
 
 def shoot_triple(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
     if not all_enemies: return
+    if triple_shot_sound:
+        triple_shot_sound.play()
     nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
     base_direction = (nearest_enemy.pos - player_world_pos).normalize() if (nearest_enemy.pos - player_world_pos).length_squared() > 0 else pygame.Vector2(0, -1)
     for angle_offset in [-15, 0, 15]:
