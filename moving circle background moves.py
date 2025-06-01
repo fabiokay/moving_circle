@@ -68,6 +68,23 @@ except pygame.error as e:
     player_death_sound = None
     select_archetype_sound = None
 
+# --- Static Background Image ---
+try:
+    static_background_image = pygame.image.load("graphics/background.png").convert_alpha()
+    # If your image doesn't have alpha, you can use .convert() instead
+except pygame.error as e:
+    print(f"Error loading static background image: {e}")
+    static_background_image = None # Fallback if image doesn't load
+
+# --- World/Map Definition ---
+WORLD_TILES_X = 5  # How many background tiles wide the world is
+WORLD_TILES_Y = 5  # How many background tiles high the world is
+TILE_WIDTH = 0
+TILE_HEIGHT = 0
+if static_background_image:
+    TILE_WIDTH = static_background_image.get_width()
+    TILE_HEIGHT = static_background_image.get_height()
+
 camera_offset = pygame.Vector2(0, 0) # Tracks the top-left of the camera in world coordinates
 player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
 player_radius = 10
@@ -345,7 +362,14 @@ def reset_game_state():
     global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
-    player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
+    # Calculate world center if map exists, otherwise screen center
+    if TILE_WIDTH > 0 and TILE_HEIGHT > 0:
+        world_pixel_width = WORLD_TILES_X * TILE_WIDTH
+        world_pixel_height = WORLD_TILES_Y * TILE_HEIGHT
+        player_pos = pygame.Vector2(world_pixel_width / 2, world_pixel_height / 2)
+    else:
+        # Fallback to screen center if no tileable map is defined (e.g., image failed to load)
+        player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
     enemies.clear()
     particles.clear() # Player shots
     pickup_particles.clear() # Gold particles
@@ -592,6 +616,17 @@ while running:
             camera_offset.x = player_pos.x - screen.get_width() / 2
             camera_offset.y = player_pos.y - screen.get_height() / 2
 
+            # Clamp player_pos to world boundaries (if a background tile exists)
+            if TILE_WIDTH > 0 and TILE_HEIGHT > 0:
+                world_width_px = WORLD_TILES_X * TILE_WIDTH
+                world_height_px = WORLD_TILES_Y * TILE_HEIGHT
+                
+                player_pos.x = max(player_radius, min(player_pos.x, world_width_px - player_radius))
+                player_pos.y = max(player_radius, min(player_pos.y, world_height_px - player_radius))
+                # Re-calculate camera_offset after clamping player_pos to ensure it's also correct at boundaries
+                camera_offset.x = player_pos.x - screen.get_width() / 2
+                camera_offset.y = player_pos.y - screen.get_height() / 2
+
             # Shooting Logic
             current_time = pygame.time.get_ticks() / 1000.0
             if selected_player_archetype: # Ensure an archetype is selected
@@ -680,9 +715,6 @@ while running:
                     pickups_to_keep.append(pickup)
             pickup_particles = pickups_to_keep
 
-            # Player Boundary Checks (Removed as world is now scrollable)
-            # If world boundaries are needed, player_pos would be clamped against them.
-
             # --- Collision Detection (Player vs Enemy) ---
             for enemy in enemies: # Iterate without copying if just checking
                 enemy_hitbox_radius_for_player = 0
@@ -709,6 +741,27 @@ while running:
 
     # --- Drawing ---
     screen.fill(dynamic_bg_color) # Always fill screen with current background
+
+    # Draw Tiled Background (if image loaded)
+    if static_background_image and TILE_WIDTH > 0 and TILE_HEIGHT > 0:
+        # Calculate which tiles are visible
+        start_col = int(camera_offset.x // TILE_WIDTH)
+        end_col = int((camera_offset.x + screen.get_width()) // TILE_WIDTH)
+        start_row = int(camera_offset.y // TILE_HEIGHT)
+        end_row = int((camera_offset.y + screen.get_height()) // TILE_HEIGHT)
+
+        for row in range(max(0, start_row), min(WORLD_TILES_Y, end_row + 1)):
+            for col in range(max(0, start_col), min(WORLD_TILES_X, end_col + 1)):
+                tile_world_x = col * TILE_WIDTH
+                tile_world_y = row * TILE_HEIGHT
+                
+                # Convert tile's world position to screen position
+                tile_screen_x = tile_world_x - camera_offset.x
+                tile_screen_y = tile_world_y - camera_offset.y
+                
+                screen.blit(static_background_image, (tile_screen_x, tile_screen_y))
+    elif static_background_image: # Fallback if TILE_WIDTH/HEIGHT somehow 0 but image exists
+        screen.blit(static_background_image, (0,0)) # Original behavior
 
     if character_select_active:
         draw_character_select_screen(screen)
