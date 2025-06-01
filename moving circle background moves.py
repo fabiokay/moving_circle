@@ -248,6 +248,14 @@ INITIAL_MOVEMENT_SPEED = 200
 movement_speed = INITIAL_MOVEMENT_SPEED  # Player movement speed, made global for upgrades
 INITIAL_PLAYER_LEVEL = 1
 player_level = INITIAL_PLAYER_LEVEL
+INITIAL_PLAYER_HEALTH = 10
+max_player_health = INITIAL_PLAYER_HEALTH # Max health can be upgraded
+current_player_health = INITIAL_PLAYER_HEALTH
+
+# --- Player Health Bar UI ---
+PLAYER_HEALTH_BAR_WIDTH = 40
+PLAYER_HEALTH_BAR_HEIGHT = 6
+PLAYER_HEALTH_BAR_Y_OFFSET = 15 # How far below the player circle's center
 
 # --- Player Archetypes ---
 PLAYER_ARCHETYPES = [
@@ -356,6 +364,7 @@ ui_font = store_font_medium # Use the medium font for UI elements like the timer
 store_items = [
     {"id": "faster_shots", "text": "Faster Shots", "cost_text": "(Full Bar)", "rect": None},
     {"id": "player_speed", "text": "Player Speed+", "cost_text": "(Full Bar)", "rect": None},
+    {"id": "max_health", "text": "Max Health+", "cost_text": "(Full Bar)", "rect": None},
 ]
 continue_button_text = "Continue Game"
 continue_button_rect = None
@@ -363,7 +372,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Calculate world center if map exists, otherwise screen center
@@ -384,6 +393,8 @@ def reset_game_state():
     SHOOT_COOLDOWN = INITIAL_SHOOT_COOLDOWN
     movement_speed = INITIAL_MOVEMENT_SPEED
     player_level = INITIAL_PLAYER_LEVEL
+    max_player_health = INITIAL_PLAYER_HEALTH # Reset max health to initial
+    current_player_health = max_player_health # Fill health to current max
 
     enemy_spawn_timer = 0.0
     last_shot_time = 0.0
@@ -564,6 +575,10 @@ while running:
                         elif item["id"] == "player_speed":
                             movement_speed = int(movement_speed * 1.15)
                             print(f"Player Speed+ purchased! New speed: {movement_speed:.0f}")
+                        elif item["id"] == "max_health":
+                            max_player_health = int(max_player_health * 1.20)
+                            current_player_health = max_player_health # Heal to new max
+                            print(f"Max Health+ purchased! New max health: {max_player_health}")
 
                         # Increase the requirement for the next bar fill
                         MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)
@@ -720,21 +735,29 @@ while running:
             pickup_particles = pickups_to_keep
 
             # --- Collision Detection (Player vs Enemy) ---
-            for enemy in enemies: # Iterate without copying if just checking
+            for enemy in enemies[:]: # Iterate over a copy in case an enemy is removed (though not in this loop)
                 enemy_hitbox_radius_for_player = 0
                 if isinstance(enemy, EnemyTriangle):
                     # For triangle, pos is the tip. A smaller radius from the tip for player collision.
                     enemy_hitbox_radius_for_player = enemy.height * 0.4 
                 elif isinstance(enemy, SquareEnemy):
                     # For square, pos is the center. Radius is approx half diagonal.
-                    enemy_hitbox_radius_for_player = enemy.size * 0.5 # Changed to 0.5 instead of 0.7
+                    enemy_hitbox_radius_for_player = enemy.size * 0.5 
                 
                 if (player_pos - enemy.pos).length_squared() < (player_radius + enemy_hitbox_radius_for_player)**2:
-                    if player_death_sound:
-                        player_death_sound.play()
-                    game_over_active = True
-                    store_active = False # Ensure store doesn't open if game over happens simultaneously
-                    print(f"GAME OVER: Player collided with {type(enemy).__name__} at {enemy.pos}")
+                    current_player_health -= 1
+                    print(f"Player hit! Health: {current_player_health}/{max_player_health}")
+                    # Knockback the enemy slightly or destroy if it's a one-hit type for player collision
+                    if enemy in enemies: enemies.remove(enemy) # Simple removal on hit, can be more complex
+
+                    if current_player_health <= 0:
+                        if player_death_sound:
+                            player_death_sound.play()
+                        game_over_active = True
+                        store_active = False 
+                        print(f"GAME OVER: Player health depleted by {type(enemy).__name__} at {enemy.pos}")
+                    elif enemy_hit_sound: # Player was hit but not dead
+                        random.choice(enemy_hit_sound).play() # Play a generic hit sound
                     # Optional: Clear dynamic elements for a cleaner game over screen
                     # enemies.clear()
                     # particles.clear() 
@@ -793,6 +816,18 @@ while running:
         player_screen_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
         player_draw_color = selected_player_archetype["color"] if selected_player_archetype else crimson # Fallback
         pygame.draw.circle(screen, player_draw_color, player_screen_pos, player_radius)
+
+        # Draw Player Health Bar (below player)
+        if current_player_health > 0 : # Only draw if alive
+            health_ratio = current_player_health / max_player_health if max_player_health > 0 else 0
+            bar_fill_width = int(PLAYER_HEALTH_BAR_WIDTH * health_ratio)
+            bar_x = player_screen_pos.x - PLAYER_HEALTH_BAR_WIDTH / 2
+            bar_y = player_screen_pos.y + player_radius + PLAYER_HEALTH_BAR_Y_OFFSET - PLAYER_HEALTH_BAR_HEIGHT / 2
+            
+            # Background of health bar (e.g., dark red or grey)
+            pygame.draw.rect(screen, dark_slate_gray, (bar_x, bar_y, PLAYER_HEALTH_BAR_WIDTH, PLAYER_HEALTH_BAR_HEIGHT))
+            # Fill of health bar (e.g., green or red)
+            pygame.draw.rect(screen, dark_sea_green, (bar_x, bar_y, bar_fill_width, PLAYER_HEALTH_BAR_HEIGHT))
 
         # Draw UI Bar for pickups
         pygame.draw.rect(screen, BAR_BG_COLOR, (BAR_X, BAR_Y, BAR_MAX_WIDTH, BAR_HEIGHT))
