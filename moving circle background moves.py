@@ -62,7 +62,7 @@ standard_player_image = None # For player_1.png
 try:
     background_music_stage_1 = pygame.mixer.Sound("audio/background_music_stage_1.mp3") # Corrected filename
     if background_music_stage_1:
-        background_music_stage_1.set_volume(0.3) # Set volume to 50%
+        background_music_stage_1.set_volume(0.1) # Set volume to 50%
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
     nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
     triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
@@ -83,7 +83,7 @@ except pygame.error as e:
 
 # --- Static Background Image ---
 try:
-    static_background_image = pygame.image.load("graphics/background.jpg").convert_alpha()
+    static_background_image = pygame.image.load("graphics/background_stage_1.png").convert_alpha()
     # If your image doesn't have alpha, you can use .convert() instead
 except pygame.error as e:
     print(f"Error loading static background image: {e}")
@@ -100,7 +100,7 @@ if static_background_image:
 
 camera_offset = pygame.Vector2(0, 0) # Tracks the top-left of the camera in world coordinates
 player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
-player_radius = 10
+player_radius = 20
 
 # --- Particle shoot Setup ---
 class Particle:
