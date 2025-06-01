@@ -47,6 +47,10 @@ bg_color_transition_progress = 0.0
 BG_COLOR_TRANSITION_SPEED = 0.02 # Speed of transition (0.02 means 50 seconds for a full cycle segment)
 dynamic_bg_color = BG_CYCLE_COLORS[current_bg_color_index]
 
+# --- Player Size ---
+# Define player_radius here so it can be used for scaling the image if needed
+player_radius = 15 # Example: Set desired radius. Was 20, changing to 10 for smaller sprite.
+
 # --- Sound Effects --- (Initialize all to None or empty for robust error handling)
 background_music_stage_1 = None
 standard_shot_sound = None
@@ -76,9 +80,11 @@ try:
     ]
     player_death_sound = pygame.mixer.Sound("audio/player_death.wav")
     select_archetype_sound = pygame.mixer.Sound("audio/select_player.wav")
-    standard_player_image = pygame.image.load("graphics/player_1.png").convert_alpha()
+    _original_player_image = pygame.image.load("graphics/player_1.png").convert_alpha()
+    if _original_player_image: # Scale it if loaded successfully
+        standard_player_image = pygame.transform.smoothscale(_original_player_image, (player_radius * 2, player_radius * 2))
 except pygame.error as e:
-    print(f"Error loading sound: {e}")
+    print(f"Error loading asset (sound or image): {e}")
     pass # Variables remain None/empty if loading failed or a general error occurred.
 
 # --- Static Background Image ---
@@ -100,7 +106,6 @@ if static_background_image:
 
 camera_offset = pygame.Vector2(0, 0) # Tracks the top-left of the camera in world coordinates
 player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
-player_radius = 20
 
 # --- Particle shoot Setup ---
 class Particle:
@@ -135,6 +140,7 @@ class EnemyTriangle:
         self.base_width = 15  # Full width of the base
         self.speed = random.uniform(70, 110)  # Pixels per second
         self.color = olive_drab
+        self.collision_radius = self.height * 0.75 # Radius for enemy-enemy collision
 
         # Spawn on a random edge, with the tip (self.pos) starting off-screen
         edge = random.choice(["top", "bottom", "left", "right"])
@@ -198,6 +204,7 @@ class SquareEnemy:
         self.color = self.initial_color
         self.health = 2
         self.max_health = 2 # Store max health for potential future use (e.g. health bars)
+        self.collision_radius = self.size * 0.75 # Radius for enemy-enemy collision (a bit larger than half diagonal)
 
     def update(self, target_pos, dt):
         if (target_pos - self.pos).length_squared() > 0:
@@ -728,6 +735,27 @@ while running:
             # Enemy Update
             for enemy in enemies: # No need to copy if not removing during iteration here
                 enemy.update(player_pos, dt)
+
+            # Enemy-Enemy Collision Resolution (to prevent stacking)
+            for i, enemy1 in enumerate(enemies):
+                for j in range(i + 1, len(enemies)):
+                    enemy2 = enemies[j]
+                    
+                    dist_vec = enemy1.pos - enemy2.pos
+                    dist_sq = dist_vec.length_squared()
+                    total_radii = enemy1.collision_radius + enemy2.collision_radius
+
+                    if dist_sq < total_radii**2 and dist_sq > 0: # They are overlapping and not at the exact same spot
+                        distance = dist_vec.length()
+                        overlap = total_radii - distance
+                        separation_vector = dist_vec.normalize() * (overlap / 2) # Each moves by half the overlap
+                        
+                        enemy1.pos += separation_vector
+                        enemy2.pos -= separation_vector
+                    elif dist_sq == 0: # Exactly on top, nudge them apart randomly
+                        nudge = pygame.Vector2(random.uniform(-1, 1), random.uniform(-1, 1)).normalize() * 0.1
+                        enemy1.pos += nudge
+                        enemy2.pos -= nudge
 
             # Collision: Projectile vs Enemy
             for particle in particles[:]:
