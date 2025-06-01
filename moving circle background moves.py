@@ -50,6 +50,7 @@ dynamic_bg_color = BG_CYCLE_COLORS[current_bg_color_index]
 # --- Sound Effects ---
 try:
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
+    nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
     pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
     enemy_hit_sound = [
         pygame.mixer.Sound("audio/enemy_hit1.wav"),
@@ -63,6 +64,7 @@ try:
 except pygame.error as e:
     print(f"Error loading sound: {e}")
     standard_shot_sound = None # Fallback if sound doesn't load
+    nova_shot_sound = None # Fallback if sound doesn't load
     pickup_sound = None
     enemy_hit_sound = [] # Fallback to empty list
     player_death_sound = None
@@ -294,6 +296,8 @@ def shoot_triple(player_world_pos, all_enemies, particle_list, particle_color, c
         particle_list.append(Particle(player_world_pos, player_world_pos + shot_direction * 100, color=particle_color)) # Target is far point
 
 def shoot_nova(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
+    if nova_shot_sound:
+        nova_shot_sound.play()
     for i in range(8): # 8 projectiles
         shot_direction = pygame.Vector2(1, 0).rotate(i * 45) # 360/8 = 45 degrees
         particle_list.append(Particle(player_world_pos, player_world_pos + shot_direction * 100, color=particle_color))
