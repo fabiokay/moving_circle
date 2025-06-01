@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual environment
+venv/
+.venv/
+env/
+ENV/
+virtualenv/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Log files
+*.log
+logs/
+
+# stuff i use
+krita/
+Tests/
+
+# Instance-specific configuration
+# .env
+# secrets.py
+# config.local.py
