@@ -25,6 +25,7 @@ MEDIUM_PURPLE = pygame.Color("#9370DB")
 DARK_SEA_GREEN = pygame.Color("#8FBC8F")
 LIGHT_SKY_BLUE = pygame.Color("#87CEFA")
 CRIMSON = pygame.Color("#740B20")
+ORANGE_RED = pygame.Color("#FF4500") # For Hexagon Enemy
 GOLD = pygame.Color("#FFF200") # For pickup particles
 DARK_BLUE = pygame.Color("#00008B") # For store background
 
@@ -55,6 +56,11 @@ ENEMY_SPAWN_INTERVAL = 1.5
 MAX_ENEMIES = 50
 SQUARE_GROUP_SIZE_MIN = 2
 SQUARE_GROUP_SIZE_MAX = 4
+HEXAGON_ENEMY_RADIUS = 22 # Distance from center to vertex, square size is 18
+HEXAGON_ENEMY_HEALTH = 3
+HEXAGON_ENEMY_SPEED_MIN = 50
+HEXAGON_ENEMY_SPEED_MAX = 90
+
 
 # --- Pickups ---
 SPECIAL_PICKUP_CHANCE = 0.15

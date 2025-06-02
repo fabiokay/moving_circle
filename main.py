@@ -3,6 +3,7 @@ import pygame
 import random
 import sys # For pygame.quit()
 import pygame.mixer
+import math # For hexagon drawing
 import settings # Import your new settings file
 
 # pygame setup
@@ -211,6 +212,51 @@ class SquareEnemy:
             return True # Destroyed
         return False # Still alive
 
+# --- Enemy Hexagon Setup ---
+class HexagonEnemy:
+    def __init__(self, pos, screen_width, screen_height, radius=settings.HEXAGON_ENEMY_RADIUS, speed=None, health=settings.HEXAGON_ENEMY_HEALTH):
+        self.radius_stat = radius # Distance from center to vertex
+        self.pos = pygame.Vector2(pos)
+        if speed is None:
+            self.speed = random.uniform(settings.HEXAGON_ENEMY_SPEED_MIN, settings.HEXAGON_ENEMY_SPEED_MAX)
+        else:
+            self.speed = speed
+        self.initial_color = settings.ORANGE_RED
+        self.damaged_color = settings.GREY # Same damaged color as square for consistency
+        self.color = self.initial_color
+        self.health = health
+        self.max_health = health
+        self.collision_radius = self.radius_stat # For enemy-enemy collision, use full radius
+
+    def update(self, target_pos, dt):
+        if (target_pos - self.pos).length_squared() > 0:
+            direction = (target_pos - self.pos).normalize()
+            self.pos += direction * self.speed * dt
+
+    def draw(self, surface, camera_offset):
+        # Change color if damaged
+        if self.health < self.max_health:
+            self.color = self.damaged_color
+        else:
+            self.color = self.initial_color
+
+        points = []
+        center_screen_x = self.pos.x - camera_offset.x
+        center_screen_y = self.pos.y - camera_offset.y
+
+        for i in range(6):
+            # Angle for a point-up hexagon (first point at top)
+            angle_rad = math.radians(60 * i - 90)
+            x = center_screen_x + self.radius_stat * math.cos(angle_rad)
+            y = center_screen_y + self.radius_stat * math.sin(angle_rad)
+            points.append((x, y))
+        pygame.draw.polygon(surface, self.color, points)
+
+    def take_damage(self):
+        self.health -= 1
+        if self.health <= 0:
+            return True # Destroyed
+        return False # Still alive
 # --- Pickup Particle Setup ---
 class PickupParticle:
     def __init__(self, pos, color=settings.GOLD, radius=7, value=1):
@@ -337,6 +383,7 @@ STORE_BUTTON_HOVER_COLOR = settings.LIGHT_SKY_BLUE
 
 # --- Game Timer ---
 total_game_time_seconds = 0.0
+kill_count = 0 # Initialize kill counter
 ui_font = None # Will be initialized with store fonts
 
 # --- Game Over State ---
@@ -367,7 +414,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -395,6 +442,7 @@ def reset_game_state():
     max_player_health = settings.INITIAL_PLAYER_HEALTH
     current_player_health = max_player_health
 
+    kill_count = 0 # Reset kill count
     enemy_spawn_timer = 0.0
     last_shot_time = 0.0
 
@@ -682,32 +730,39 @@ while running:
             enemy_spawn_timer += dt
             if enemy_spawn_timer >= ENEMY_SPAWN_INTERVAL and len(enemies) < MAX_ENEMIES:
                 enemy_spawn_timer = 0.0
-                if random.random() < 0.6: # Spawn Triangle
+                spawn_type_roll = random.random()
+                screen_w, screen_h = screen.get_width(), screen.get_height() # Used by all spawns
+
+                # Determine spawn edge and base position (world coordinates)
+                edge = random.choice(["top", "bottom", "left", "right"])
+                margin = 30 # General margin for spawning off-screen
+                world_cx, world_cy = 0, 0
+
+                if edge == "top":
+                    world_cx = camera_offset.x + random.uniform(margin * 2, screen_w - margin * 2)
+                    world_cy = camera_offset.y - margin
+                elif edge == "bottom":
+                    world_cx = camera_offset.x + random.uniform(margin * 2, screen_w - margin * 2)
+                    world_cy = camera_offset.y + screen_h + margin
+                elif edge == "left":
+                    world_cx = camera_offset.x - margin
+                    world_cy = camera_offset.y + random.uniform(margin * 2, screen_h - margin * 2)
+                else:  # right
+                    world_cx = camera_offset.x + screen_w + margin
+                    world_cy = camera_offset.y + random.uniform(margin * 2, screen_h - margin * 2)
+
+                if spawn_type_roll < 0.40: # 40% chance for Triangle
                     enemies.append(EnemyTriangle((screen.get_width(), screen.get_height()), camera_offset))
-                else: # Spawn Square Group
+                elif spawn_type_roll < 0.75: # 35% chance for Square Group (0.40 + 0.35 = 0.75)
                     num_squares = random.randint(SQUARE_GROUP_SIZE_MIN, SQUARE_GROUP_SIZE_MAX)
-                    edge = random.choice(["top", "bottom", "left", "right"])
-                    margin = 30
-                    screen_w, screen_h = screen.get_width(), screen.get_height()
-                    
-                    world_cx, world_cy = 0, 0
-                    if edge == "top":
-                        world_cx = camera_offset.x + random.uniform(margin * 2, screen_w - margin * 2)
-                        world_cy = camera_offset.y - margin
-                    elif edge == "bottom":
-                        world_cx = camera_offset.x + random.uniform(margin * 2, screen_w - margin * 2)
-                        world_cy = camera_offset.y + screen_h + margin
-                    elif edge == "left":
-                        world_cx = camera_offset.x - margin
-                        world_cy = camera_offset.y + random.uniform(margin * 2, screen_h - margin * 2)
-                    else:  # right
-                        world_cx = camera_offset.x + screen_w + margin
-                        world_cy = camera_offset.y + random.uniform(margin * 2, screen_h - margin * 2)
-                        
                     for _ in range(num_squares):
                         if len(enemies) < MAX_ENEMIES:
                             offset_world_pos = pygame.Vector2(world_cx + random.uniform(-25, 25), world_cy + random.uniform(-25, 25))
                             enemies.append(SquareEnemy(offset_world_pos, screen_w, screen_h))
+                else: # 25% chance for Hexagon (remaining)
+                    if len(enemies) < MAX_ENEMIES:
+                        # Spawn a single hexagon at the calculated edge position
+                        enemies.append(HexagonEnemy(pygame.Vector2(world_cx, world_cy), screen_w, screen_h))
             
             # Update Projectiles (Player Shots)
             for particle in particles[:]:
@@ -743,10 +798,17 @@ while running:
             # Collision: Projectile vs Enemy
             for particle in particles[:]:
                 for enemy in enemies[:]: # Copy for safe removal
-                    enemy_col_radius = enemy.height * 0.5 if isinstance(enemy, EnemyTriangle) else enemy.size * 0.707
+                    enemy_col_radius = 0
+                    if isinstance(enemy, EnemyTriangle):
+                        enemy_col_radius = enemy.height * 0.5 # Approx radius for triangle tip area
+                    elif isinstance(enemy, SquareEnemy):
+                        enemy_col_radius = enemy.size * 0.707 # Approx half diagonal for square
+                    elif isinstance(enemy, HexagonEnemy):
+                        enemy_col_radius = enemy.radius_stat # Hexagon radius (center to vertex)
+
                     if (particle.pos - enemy.pos).length_squared() < (particle.radius + enemy_col_radius)**2:
                         if particle in particles: particles.remove(particle) # Check if still exists
-                        destroyed = enemy.take_damage() if isinstance(enemy, SquareEnemy) else True
+                        destroyed = enemy.take_damage() if hasattr(enemy, 'take_damage') else True
                         if enemy_hit_sound and destroyed: # Play sound if destroyed and sounds are loaded
                             random.choice(enemy_hit_sound).play()
                         if destroyed:
@@ -756,6 +818,7 @@ while running:
                             else:
                                 pickup_particles.append(PickupParticle(enemy.pos, color=settings.GOLD, radius=7, value=1))
                             
+                            kill_count += 1 # Increment kill count
                             if enemy in enemies: enemies.remove(enemy) # Check if still exists
                         break # Particle can only hit one enemy
 
@@ -784,11 +847,14 @@ while running:
                 elif isinstance(enemy, SquareEnemy):
                     # For square, pos is the center. Radius is approx half diagonal.
                     enemy_hitbox_radius_for_player = enemy.size * 0.5 
-                
+                elif isinstance(enemy, HexagonEnemy):
+                    # For hexagon, use its radius, perhaps slightly reduced for player collision
+                    enemy_hitbox_radius_for_player = enemy.radius_stat * 0.85
                 if (player_pos - enemy.pos).length_squared() < (player_radius + enemy_hitbox_radius_for_player)**2:
                     current_player_health -= 1
                     print(f"Player hit! Health: {current_player_health}/{max_player_health}")
                     # Knockback the enemy slightly or destroy if it's a one-hit type for player collision
+                    kill_count +=1 # Increment kill count when player collision destroys an enemy
                     if enemy in enemies: enemies.remove(enemy) # Simple removal on hit, can be more complex
 
                     if current_player_health <= 0:
@@ -909,6 +975,12 @@ while running:
         timer_surf = ui_font.render(timer_text, True, settings.WHITE)
         timer_rect = timer_surf.get_rect(topright=(screen.get_width() - 20, 20))
         screen.blit(timer_surf, timer_rect)
+
+        # Draw Kill Counter (below timer)
+        kill_text_str = f"Kills: {kill_count}"
+        kill_surf = ui_font.render(kill_text_str, True, settings.WHITE)
+        kill_rect = kill_surf.get_rect(topright=(screen.get_width() - 20, timer_rect.bottom + 5)) # Position below timer
+        screen.blit(kill_surf, kill_rect)
 
         if store_active: # Draw store on top if active (and game not over)
             draw_store_window(screen)
