@@ -87,6 +87,7 @@ if static_background_image:
 
 camera_offset = pygame.Vector2(0, 0) # Tracks the top-left of the camera in world coordinates
 player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
+player_trail_positions = [] # For player trail effect
 
 # --- Particle shoot Setup ---
 class Particle:
@@ -414,7 +415,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -432,6 +433,7 @@ def reset_game_state():
     enemies.clear()
     particles.clear() # Player shots
     pickup_particles.clear() # Gold particles
+    player_trail_positions.clear() # Clear player trail
 
     total_game_time_seconds = 0.0
     current_pickups_count = 0
@@ -699,6 +701,12 @@ while running:
                 move_direction.normalize_ip()
                 player_pos += move_direction * movement_speed * dt
 
+            # --- Player Trail Update ---
+            # Add current position to the trail history (world coordinates)
+            player_trail_positions.append(player_pos.copy())
+            if len(player_trail_positions) > settings.MAX_TRAIL_LENGTH:
+                player_trail_positions.pop(0) # Remove the oldest position
+
             # Update camera_offset to keep player centered
             camera_offset.x = player_pos.x - screen.get_width() / 2
             camera_offset.y = player_pos.y - screen.get_height() / 2
@@ -901,18 +909,50 @@ while running:
         draw_character_select_screen(screen)
     elif game_over_active:
         draw_game_over_screen(screen, total_game_time_seconds)
-    else: # Game is active (could be gameplay or store)
+    else: # Game is active (could be gameplay or store mode)
         # Draw pickup particles (gold)
         for pickup in pickup_particles:
             pickup.draw(screen, camera_offset)
         
-        # Draw player projectiles (shots) - only if not in store
-        if not store_active:
+        if not store_active: # Only draw these game elements if not in store
+            # --- Draw Player Trail ---
+            if selected_player_archetype:
+                trail_image_base = None
+                if selected_player_archetype["id"] == "standard" and standard_player_image:
+                    trail_image_base = standard_player_image
+                elif selected_player_archetype["id"] == "triple_shot" and triple_shot_player_image:
+                    trail_image_base = triple_shot_player_image
+                elif selected_player_archetype["id"] == "nova_burst" and nova_burst_player_image:
+                    trail_image_base = nova_burst_player_image
+
+                num_trail_segments = len(player_trail_positions)
+                for i, trail_world_pos in enumerate(player_trail_positions):
+                    # Alpha fades from transparent (oldest) to TRAIL_MAX_ALPHA (newest in trail)
+                    alpha = int(((i + 1) / num_trail_segments) * settings.TRAIL_MAX_ALPHA) if num_trail_segments > 0 else settings.TRAIL_MAX_ALPHA
+                    
+                    trail_screen_pos = trail_world_pos - camera_offset
+
+                    if trail_image_base:
+                        temp_trail_image = trail_image_base.copy()
+                        temp_trail_image.set_alpha(alpha)
+                        trail_image_rect = temp_trail_image.get_rect(center=trail_screen_pos)
+                        screen.blit(temp_trail_image, trail_image_rect)
+                    else: # Fallback to drawing circles for trail if no image
+                        player_draw_color = selected_player_archetype["color"]
+                        # Create a temporary surface for the circle to apply alpha
+                        # Ensure the surface is large enough for the player_radius
+                        trail_circle_surface_size = player_radius * 2
+                        trail_circle_surface = pygame.Surface((trail_circle_surface_size, trail_circle_surface_size), pygame.SRCALPHA)
+                        pygame.draw.circle(trail_circle_surface, (*player_draw_color, alpha), (player_radius, player_radius), player_radius)
+
+                        trail_circle_rect = trail_circle_surface.get_rect(center=trail_screen_pos)
+                        screen.blit(trail_circle_surface, trail_circle_rect)
+
+            # Draw player projectiles (shots)
             for particle in particles: # Player shots
                 particle.draw(screen, camera_offset)
 
-        # Draw enemies - only if not in store
-        if not store_active:
+            # Draw enemies
             for enemy in enemies:
                 if isinstance(enemy, EnemyTriangle):
                     enemy.draw(screen, player_pos, camera_offset) # player_pos is world pos

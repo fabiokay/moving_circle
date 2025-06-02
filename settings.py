@@ -48,6 +48,10 @@ PLAYER_HEALTH_BAR_WIDTH = 40 # Or perhaps player_radius * 2.5
 PLAYER_HEALTH_BAR_HEIGHT = 6
 PLAYER_HEALTH_BAR_Y_OFFSET = 15
 
+# Player Trail Settings
+MAX_TRAIL_LENGTH = 7  # Number of segments in the trail
+TRAIL_MAX_ALPHA = 100 # Max alpha (0-255) for the newest part of the trail (oldest parts will be more transparent)
+
 # --- Shooting ---
 INITIAL_SHOOT_COOLDOWN = 1.0
 
