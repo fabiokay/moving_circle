@@ -260,16 +260,20 @@ class HexagonEnemy:
         return False # Still alive
 # --- Pickup Particle Setup ---
 class PickupParticle:
-    def __init__(self, pos, color=settings.GOLD, radius=7, value=1):
+    def __init__(self, pos, color=settings.GOLD, width=settings.PICKUP_PARTICLE_WIDTH, height=settings.PICKUP_PARTICLE_HEIGHT, value=1):
         self.pos = pygame.Vector2(pos) # Position where it's dropped
-        self.radius = radius
+        self.width = width
+        self.height = height
         self.color = color
         self.value = value # How much this pickup is worth
 
     def draw(self, surface, camera_offset):
         screen_pos = self.pos - camera_offset
-        pygame.draw.circle(surface, self.color, (int(screen_pos.x), int(screen_pos.y)), self.radius)
-
+        # For pygame.draw.ellipse, pos is the top-left of the bounding rect
+        ellipse_rect = pygame.Rect(screen_pos.x - self.width / 2,
+                                   screen_pos.y - self.height / 2,
+                                   self.width, self.height)
+        pygame.draw.ellipse(surface, self.color, ellipse_rect)
 
 # --- Enemy Variables ---
 enemies = []
@@ -822,10 +826,10 @@ while running:
                         if destroyed:
                             # Chance to drop a special pickup
                             if random.random() < SPECIAL_PICKUP_CHANCE:
-                                pickup_particles.append(PickupParticle(enemy.pos, color=settings.SPECIAL_PICKUP_COLOR, radius=8, value=settings.SPECIAL_PICKUP_VALUE))
+                                pickup_particles.append(PickupParticle(enemy.pos, color=settings.SPECIAL_PICKUP_COLOR, width=settings.SPECIAL_PICKUP_WIDTH, height=settings.SPECIAL_PICKUP_HEIGHT, value=settings.SPECIAL_PICKUP_VALUE))
                             else:
-                                pickup_particles.append(PickupParticle(enemy.pos, color=settings.GOLD, radius=7, value=1))
-                            
+                                pickup_particles.append(PickupParticle(enemy.pos, color=settings.GOLD, width=settings.PICKUP_PARTICLE_WIDTH, height=settings.PICKUP_PARTICLE_HEIGHT, value=1))
+
                             kill_count += 1 # Increment kill count
                             if enemy in enemies: enemies.remove(enemy) # Check if still exists
                         break # Particle can only hit one enemy
@@ -833,7 +837,14 @@ while running:
             # Collision: Player vs Pickup Particle
             pickups_to_keep = []
             for pickup in pickup_particles:
-                if (player_pos - pickup.pos).length_squared() < (player_radius + pickup.radius)**2:
+                # AABB collision check: player (circle approximated as square) vs pickup (ellipse bounding box)
+                player_world_rect = pygame.Rect(player_pos.x - player_radius,
+                                                player_pos.y - player_radius,
+                                                player_radius * 2, player_radius * 2)
+                pickup_world_rect = pygame.Rect(pickup.pos.x - pickup.width / 2,
+                                                pickup.pos.y - pickup.height / 2,
+                                                pickup.width, pickup.height)
+                if player_world_rect.colliderect(pickup_world_rect):
                     if pickup_sound:
                         pickup_sound.play()
                     if current_pickups_count < MAX_PICKUPS_FOR_FULL_BAR:

@@ -72,6 +72,17 @@ SPECIAL_PICKUP_COLOR = PINK
 SPECIAL_PICKUP_VALUE = 2
 INITIAL_MAX_PICKUPS_FOR_FULL_BAR = 10
 
+# Pickup Particle Ellipse Dimensions
+PICKUP_PARTICLE_WIDTH = 10
+PICKUP_PARTICLE_HEIGHT = 20
+SPECIAL_PICKUP_WIDTH = 15
+SPECIAL_PICKUP_HEIGHT = 22
+
+# You can remove or comment out the old radius settings if they are no longer used elsewhere:
+# GOLD_PICKUP_RADIUS = 7
+# SPECIAL_PICKUP_RADIUS = 8 # (if you had this)
+
+
 # --- UI Bar ---
 BAR_HEIGHT = 25
 BAR_MAX_WIDTH = 300
