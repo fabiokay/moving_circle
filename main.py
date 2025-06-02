@@ -34,6 +34,8 @@ enemy_hit_sound = []
 player_death_sound = None
 select_archetype_sound = None
 standard_player_image = None # For player_1.png
+triple_shot_player_image = None # For player_2.png
+nova_burst_player_image = None # For player_3.png
 
 try:
     background_music_stage_1 = pygame.mixer.Sound(settings.SOUND_BG_MUSIC_PATH)
@@ -53,8 +55,14 @@ try:
     player_death_sound = pygame.mixer.Sound("audio/player_death.wav")
     select_archetype_sound = pygame.mixer.Sound("audio/select_player.wav")
     _original_player_image = pygame.image.load(settings.IMAGE_PLAYER_PATH).convert_alpha()
+    _original_player_triple_image = pygame.image.load(settings.IMAGE_PLAYER_TRIPLE_SHOT_PATH).convert_alpha()
+    _original_player_nova_image = pygame.image.load(settings.IMAGE_PLAYER_NOVA_BURST_PATH).convert_alpha()
     if _original_player_image: # Scale it if loaded successfully
         standard_player_image = pygame.transform.smoothscale(_original_player_image, (player_radius * 2, player_radius * 2))
+    if _original_player_triple_image:
+        triple_shot_player_image = pygame.transform.smoothscale(_original_player_triple_image, (player_radius * 2, player_radius * 2))
+    if _original_player_nova_image:
+        nova_burst_player_image = pygame.transform.smoothscale(_original_player_nova_image, (player_radius * 2, player_radius * 2))
 except pygame.error as e:
     print(f"Error loading asset (sound or image): {e}")
     pass # Variables remain None/empty if loading failed or a general error occurred.
@@ -517,6 +525,14 @@ def draw_character_select_screen(surface):
             img_rect = standard_player_image.get_rect(center=(circle_center_x, circle_center_y))
             surface.blit(standard_player_image, img_rect)
             visual_element_bottom_y = img_rect.bottom
+        elif archetype["id"] == "triple_shot" and triple_shot_player_image:
+            img_rect = triple_shot_player_image.get_rect(center=(circle_center_x, circle_center_y))
+            surface.blit(triple_shot_player_image, img_rect)
+            visual_element_bottom_y = img_rect.bottom
+        elif archetype["id"] == "nova_burst" and nova_burst_player_image:
+            img_rect = nova_burst_player_image.get_rect(center=(circle_center_x, circle_center_y))
+            surface.blit(nova_burst_player_image, img_rect)
+            visual_element_bottom_y = img_rect.bottom
         else: # Fallback to circle for other archetypes or if image fails to load
             default_circle_radius = 20
             pygame.draw.circle(surface, archetype["color"], (circle_center_x, circle_center_y), default_circle_radius)
@@ -844,6 +860,14 @@ while running:
         if selected_player_archetype and selected_player_archetype["id"] == "standard" and standard_player_image:
             player_image_rect = standard_player_image.get_rect(center=player_screen_pos)
             screen.blit(standard_player_image, player_image_rect)
+            drawn_player_bottom_y = player_image_rect.bottom
+        elif selected_player_archetype and selected_player_archetype["id"] == "triple_shot" and triple_shot_player_image:
+            player_image_rect = triple_shot_player_image.get_rect(center=player_screen_pos)
+            screen.blit(triple_shot_player_image, player_image_rect)
+            drawn_player_bottom_y = player_image_rect.bottom
+        elif selected_player_archetype and selected_player_archetype["id"] == "nova_burst" and nova_burst_player_image:
+            player_image_rect = nova_burst_player_image.get_rect(center=player_screen_pos)
+            screen.blit(nova_burst_player_image, player_image_rect)
             drawn_player_bottom_y = player_image_rect.bottom
         elif selected_player_archetype: # Other archetypes or fallback
             player_draw_color = selected_player_archetype["color"]

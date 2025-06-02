@@ -86,5 +86,7 @@ WORLD_TILES_Y = 5
 FONT_DEFAULT_PATH = None # For pygame.font.Font(None, size)
 SOUND_BG_MUSIC_PATH = "audio/background_music_stage_1.mp3"
 IMAGE_PLAYER_PATH = "graphics/player_1.png"
+IMAGE_PLAYER_TRIPLE_SHOT_PATH = "graphics/player_2.png"
+IMAGE_PLAYER_NOVA_BURST_PATH = "graphics/player_3.png"
 IMAGE_BACKGROUND_PATH = "graphics/background_stage_1.png"
 # ... other asset paths
