@@ -78,9 +78,23 @@ PICKUP_PARTICLE_HEIGHT = 20
 SPECIAL_PICKUP_WIDTH = 15
 SPECIAL_PICKUP_HEIGHT = 22
 
-# You can remove or comment out the old radius settings if they are no longer used elsewhere:
-# GOLD_PICKUP_RADIUS = 7
-# SPECIAL_PICKUP_RADIUS = 8 # (if you had this)
+# --- Player Archetype Colors (add new color) ---
+FOREST_GREEN = (34, 139, 34)
+
+# --- Player Image Paths (add new image path) ---
+
+
+# --- Sound Effect Paths (add new sound path) ---
+SOUND_BOUNCING_SHOT_PATH = "audio/bouncing_shot.wav"
+
+# --- Bouncing Projectile Settings ---
+BOUNCING_PARTICLE_LIFETIME = 3.5  # seconds
+BOUNCING_PARTICLE_SPEED = 220
+BOUNCING_PARTICLE_RADIUS = 6
+BOUNCING_PARTICLE_COLOR = FOREST_GREEN # Or any other color
+BOUNCING_PARTICLE_MAX_BOUNCES = 3
+# If True and world map exists, bounces off world edges. Otherwise, bounces off visible screen edges.
+BOUNCING_PARTICLE_USE_WORLD_BOUNDS = False
 
 
 # --- UI Bar ---
@@ -109,5 +123,6 @@ SOUND_BG_MUSIC_PATH = "audio/background_music_stage_1.mp3"
 IMAGE_PLAYER_PATH = "graphics/player_1.png"
 IMAGE_PLAYER_TRIPLE_SHOT_PATH = "graphics/player_2.png"
 IMAGE_PLAYER_NOVA_BURST_PATH = "graphics/player_3.png"
+IMAGE_PLAYER_BOUNCING_SHOT_PATH = "graphics/player_4.png"
 IMAGE_BACKGROUND_PATH = "graphics/background_stage_1.png"
 # ... other asset paths

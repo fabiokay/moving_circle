@@ -37,6 +37,7 @@ select_archetype_sound = None
 standard_player_image = None # For player_1.png
 triple_shot_player_image = None # For player_2.png
 nova_burst_player_image = None # For player_3.png
+bouncing_shot_player_image = None # For the new bouncing shot player
 
 try:
     background_music_stage_1 = pygame.mixer.Sound(settings.SOUND_BG_MUSIC_PATH)
@@ -45,6 +46,7 @@ try:
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
     nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
     triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
+    bouncing_shot_sound = pygame.mixer.Sound(settings.SOUND_BOUNCING_SHOT_PATH)
     # damaging_aura_sound = pygame.mixer.Sound("audio/damaging_aura.wav") # Example if you have it
     pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
     enemy_hit_sound = [
@@ -58,12 +60,15 @@ try:
     _original_player_image = pygame.image.load(settings.IMAGE_PLAYER_PATH).convert_alpha()
     _original_player_triple_image = pygame.image.load(settings.IMAGE_PLAYER_TRIPLE_SHOT_PATH).convert_alpha()
     _original_player_nova_image = pygame.image.load(settings.IMAGE_PLAYER_NOVA_BURST_PATH).convert_alpha()
+    _original_player_bouncing_image = pygame.image.load(settings.IMAGE_PLAYER_BOUNCING_SHOT_PATH).convert_alpha()
     if _original_player_image: # Scale it if loaded successfully
         standard_player_image = pygame.transform.smoothscale(_original_player_image, (player_radius * 2, player_radius * 2))
     if _original_player_triple_image:
         triple_shot_player_image = pygame.transform.smoothscale(_original_player_triple_image, (player_radius * 2, player_radius * 2))
     if _original_player_nova_image:
         nova_burst_player_image = pygame.transform.smoothscale(_original_player_nova_image, (player_radius * 2, player_radius * 2))
+    if _original_player_bouncing_image:
+        bouncing_shot_player_image = pygame.transform.smoothscale(_original_player_bouncing_image, (player_radius * 2, player_radius * 2))
 except pygame.error as e:
     print(f"Error loading asset (sound or image): {e}")
     pass # Variables remain None/empty if loading failed or a general error occurred.
@@ -103,17 +108,19 @@ class Particle:
         else:
             self.direction = pygame.Vector2(0, -1) # Default upwards if target is at start_pos
 
-    def update(self, dt):
+    def update(self, dt, screen_width=None, screen_height=None, camera_offset=None, world_bounds=None):
         self.pos += self.direction * self.speed * dt
 
     def draw(self, surface, camera_offset):
         screen_pos = self.pos - camera_offset
         pygame.draw.circle(surface, self.color, (int(screen_pos.x), int(screen_pos.y)), self.radius)
 
-    def is_offscreen(self, screen_width, screen_height, camera_offset):
+    def is_alive(self, screen_width, screen_height, camera_offset, world_bounds=None):
+        # For standard particles, alive means on-screen (relative to camera)
         screen_pos = self.pos - camera_offset
-        return (screen_pos.x < -self.radius or screen_pos.x > screen_width + self.radius or
-                screen_pos.y < -self.radius or screen_pos.y > screen_height + self.radius)
+        on_screen = not (screen_pos.x < -self.radius or screen_pos.x > screen_width + self.radius or
+                         screen_pos.y < -self.radius or screen_pos.y > screen_height + self.radius)
+        return on_screen
 
 # --- Enemy Triangle Setup ---
 class EnemyTriangle:
@@ -258,6 +265,7 @@ class HexagonEnemy:
         if self.health <= 0:
             return True # Destroyed
         return False # Still alive
+    
 # --- Pickup Particle Setup ---
 class PickupParticle:
     def __init__(self, pos, color=settings.GOLD, width=settings.PICKUP_PARTICLE_WIDTH, height=settings.PICKUP_PARTICLE_HEIGHT, value=1):
@@ -274,6 +282,74 @@ class PickupParticle:
                                    screen_pos.y - self.height / 2,
                                    self.width, self.height)
         pygame.draw.ellipse(surface, self.color, ellipse_rect)
+
+# --- Bouncing Particle Setup ---
+class BouncingParticle(Particle):
+    def __init__(self, start_pos, target_pos, color=settings.BOUNCING_PARTICLE_COLOR,
+                 speed=settings.BOUNCING_PARTICLE_SPEED, radius=settings.BOUNCING_PARTICLE_RADIUS,
+                 lifetime=settings.BOUNCING_PARTICLE_LIFETIME, max_bounces=settings.BOUNCING_PARTICLE_MAX_BOUNCES):
+        super().__init__(start_pos, target_pos, color, speed, radius) # Uses its own default color
+        self.lifetime = lifetime
+        self.age = 0.0
+        self.bounces_left = max_bounces
+        # self.bounce_sound = pygame.mixer.Sound("audio/bounce_effect.wav") # Optional: specific bounce sound
+
+    def update(self, dt, screen_width, screen_height, camera_offset, world_bounds=None):
+        self.age += dt
+        if not self.is_alive(screen_width, screen_height, camera_offset, world_bounds): # Check before moving
+             return
+
+        self.pos += self.direction * self.speed * dt
+
+        # Determine bounce boundaries
+        bounce_off_world = settings.BOUNCING_PARTICLE_USE_WORLD_BOUNDS and world_bounds is not None
+        
+        min_x_bound, max_x_bound, min_y_bound, max_y_bound = 0,0,0,0
+
+        if bounce_off_world:
+            min_x_bound = 0 # World map starts at 0,0
+            max_x_bound = world_bounds[0]
+            min_y_bound = 0
+            max_y_bound = world_bounds[1]
+        else: # Bounce off visible screen edges (converted to world coordinates)
+            min_x_bound = camera_offset.x
+            max_x_bound = camera_offset.x + screen_width
+            min_y_bound = camera_offset.y
+            max_y_bound = camera_offset.y + screen_height
+        
+        # Effective collision points for the particle's center based on its radius
+        eff_min_x = min_x_bound + self.radius
+        eff_max_x = max_x_bound - self.radius
+        eff_min_y = min_y_bound + self.radius
+        eff_max_y = max_y_bound - self.radius
+
+        bounced_this_frame = False
+        # Horizontal bounce
+        if self.pos.x <= eff_min_x:
+            self.pos.x = eff_min_x + (eff_min_x - self.pos.x) # Reflect position past boundary
+            self.direction.x *= -1
+            bounced_this_frame = True
+        elif self.pos.x >= eff_max_x:
+            self.pos.x = eff_max_x - (self.pos.x - eff_max_x) # Reflect position past boundary
+            self.direction.x *= -1
+            bounced_this_frame = True
+
+        # Vertical bounce
+        if self.pos.y <= eff_min_y:
+            self.pos.y = eff_min_y + (eff_min_y - self.pos.y) # Reflect position past boundary
+            self.direction.y *= -1
+            bounced_this_frame = True
+        elif self.pos.y >= eff_max_y:
+            self.pos.y = eff_max_y - (self.pos.y - eff_max_y) # Reflect position past boundary
+            self.direction.y *= -1
+            bounced_this_frame = True
+        
+        if bounced_this_frame:
+            self.bounces_left -= 1
+            # if self.bounce_sound: self.bounce_sound.play()
+
+    def is_alive(self, screen_width, screen_height, camera_offset, world_bounds=None):
+        return self.age < self.lifetime and self.bounces_left >= 0
 
 # --- Enemy Variables ---
 enemies = []
@@ -328,6 +404,14 @@ PLAYER_ARCHETYPES = [
         "description": "Splosion",
         "shoot_cooldown_modifier": 1.6, # Noticeably longer base cooldown
         "shoot_function_name": "shoot_nova"
+    },
+    {
+        "id": "bouncing_shot",
+        "name": "Ricochet",
+        "color": settings.FOREST_GREEN,
+        "description": "Bouncing shot",
+        "shoot_cooldown_modifier": 1.25,
+        "shoot_function_name": "shoot_bouncing"
     }
 ]
 selected_player_archetype = None # Will hold the chosen dict from PLAYER_ARCHETYPES
@@ -358,10 +442,36 @@ def shoot_nova(player_world_pos, all_enemies, particle_list, particle_color, cam
         shot_direction = pygame.Vector2(1, 0).rotate(i * 45) # 360/8 = 45 degrees
         particle_list.append(Particle(player_world_pos, player_world_pos + shot_direction * 100, color=particle_color))
 
+def shoot_bouncing(player_world_pos, all_enemies, particle_list, particle_color_unused, camera_offset_for_aiming):
+    if bouncing_shot_sound:
+        bouncing_shot_sound.play()
+
+    target_direction = pygame.Vector2(0, -1) # Default: up
+
+    if all_enemies:
+        nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
+        if (nearest_enemy.pos - player_world_pos).length_squared() > 0:
+            target_direction = (nearest_enemy.pos - player_world_pos).normalize()
+    else:
+        # Aim towards mouse cursor if no enemies
+        mouse_screen_pos = pygame.mouse.get_pos()
+        mouse_world_pos = pygame.Vector2(mouse_screen_pos[0] + camera_offset_for_aiming.x, 
+                                         mouse_screen_pos[1] + camera_offset_for_aiming.y)
+        if (mouse_world_pos - player_world_pos).length_squared() > 0:
+            target_direction = (mouse_world_pos - player_world_pos).normalize()
+
+    far_target_pos = player_world_pos + target_direction * 100 # For initial direction calculation
+
+    particle_list.append(BouncingParticle(
+        player_world_pos, far_target_pos, # BouncingParticle uses its own color from settings
+        # Other params like speed, radius, lifetime, max_bounces are defaults in BouncingParticle constructor
+    ))
+
 SHOOT_FUNCTIONS = {
     "shoot_standard": shoot_standard,
     "shoot_triple": shoot_triple,
     "shoot_nova": shoot_nova,
+    "shoot_bouncing": shoot_bouncing,
 }
 
 # --- UI Bar Setup ---
@@ -537,6 +647,50 @@ def draw_store_window(surface):
     continue_surf_rect = continue_surf.get_rect(center=continue_button_rect.center)
     surface.blit(continue_surf, continue_surf_rect)
 
+# --- Helper for Character Selection Screen ---
+def _draw_single_archetype_card(surface, archetype_data, x, y, card_width, card_height, mouse_pos, title_font, desc_font,
+                                 img_std, img_triple, img_nova, img_bouncing):
+    """Draws a single archetype card on the character selection screen."""
+    rect = pygame.Rect(x, y, card_width, card_height)
+    archetype_data["rect"] = rect # Store rect for click detection
+
+    # Draw border and fill
+    border_color = settings.STORE_BUTTON_HOVER_COLOR if rect.collidepoint(mouse_pos) else settings.WHITE
+    pygame.draw.rect(surface, settings.STEEL_BLUE, rect, border_radius=10) # Background
+    pygame.draw.rect(surface, border_color, rect, width=3, border_radius=10) # Border
+
+    # Position for the visual element (image or circle)
+    visual_center_x = x + card_width / 2
+    visual_center_y = y + 40 # Position towards the top of the card
+    visual_element_bottom_y = 0 # To track for positioning text below
+
+    # Determine which image to draw
+    image_to_render = None
+    if archetype_data["id"] == "standard" and img_std: image_to_render = img_std
+    elif archetype_data["id"] == "triple_shot" and img_triple: image_to_render = img_triple
+    elif archetype_data["id"] == "nova_burst" and img_nova: image_to_render = img_nova
+    elif archetype_data["id"] == "bouncing_shot" and img_bouncing: image_to_render = img_bouncing
+
+    if image_to_render:
+        img_rect = image_to_render.get_rect(center=(visual_center_x, visual_center_y))
+        surface.blit(image_to_render, img_rect)
+        visual_element_bottom_y = img_rect.bottom
+    else: # Fallback to circle
+        default_circle_radius = 20
+        pygame.draw.circle(surface, archetype_data["color"], (visual_center_x, visual_center_y), default_circle_radius)
+        visual_element_bottom_y = visual_center_y + default_circle_radius
+
+    name_surf = title_font.render(archetype_data["name"], True, settings.WHITE)
+    name_rect = name_surf.get_rect(center=(visual_center_x, visual_element_bottom_y + 25))
+    surface.blit(name_surf, name_rect)
+
+    desc_lines = archetype_data["description"].splitlines()
+    line_y_offset = name_rect.bottom + 10
+    for line_idx, line_text in enumerate(desc_lines):
+        desc_surf = desc_font.render(line_text, True, settings.LIGHT_SKY_BLUE)
+        desc_rect = desc_surf.get_rect(center=(visual_center_x, line_y_offset + line_idx * (desc_font.get_height() + 2)))
+        surface.blit(desc_surf, desc_rect)
+
 # --- Draw Character Selection Screen ---
 def draw_character_select_screen(surface):
     global PLAYER_ARCHETYPES # To store rects for clicking
@@ -551,60 +705,52 @@ def draw_character_select_screen(surface):
 
     option_width = 300
     option_height = 150 # Increased height for description
-    padding = 40
-    total_options_width = len(PLAYER_ARCHETYPES) * option_width + (len(PLAYER_ARCHETYPES) - 1) * padding
-    start_x = (surface.get_width() - total_options_width) / 2
-    current_y = surface.get_height() / 2 - option_height / 2
+    horizontal_padding = 40
+    row_padding = 30 # Vertical padding between rows
 
     mouse_pos = pygame.mouse.get_pos()
+    
+    num_total_archetypes = len(PLAYER_ARCHETYPES)
+    archetypes_for_row1 = []
+    archetype_for_row2 = None # Will hold the 4th archetype if it exists
 
-    for i, archetype in enumerate(PLAYER_ARCHETYPES):
-        option_x = start_x + i * (option_width + padding)
+    y_pos_row1 = 0
+    y_pos_row2 = 0 
+
+    if num_total_archetypes >= 4: # Two rows needed
+        archetypes_for_row1 = PLAYER_ARCHETYPES[:3]
+        archetype_for_row2 = PLAYER_ARCHETYPES[3]
+        y_pos_row1 = surface.get_height() / 2 - option_height - row_padding / 2
+        y_pos_row2 = surface.get_height() / 2 + row_padding / 2
+    else: # Single row
+        archetypes_for_row1 = PLAYER_ARCHETYPES[:]
+        y_pos_row1 = surface.get_height() / 2 - option_height / 2
+
+    # Draw Row 1
+    start_x_for_row1 = 0
+    if archetypes_for_row1:
+        num_in_row1 = len(archetypes_for_row1)
+        total_width_row1 = num_in_row1 * option_width + (num_in_row1 - 1) * horizontal_padding
+        start_x_for_row1 = (surface.get_width() - total_width_row1) / 2
+        for i, archetype in enumerate(archetypes_for_row1):
+            option_x = start_x_for_row1 + i * (option_width + horizontal_padding)
+            _draw_single_archetype_card(surface, archetype, option_x, y_pos_row1,
+                                        option_width, option_height, mouse_pos, title_font, desc_font,
+                                        standard_player_image, triple_shot_player_image,
+                                        nova_burst_player_image, bouncing_shot_player_image)
+
+    # Draw Row 2 (if the 4th archetype exists)
+    if archetype_for_row2:
+        # Position the 4th archetype under the 1st archetype of Row 1
+        # start_x_for_row1 would be the x-coordinate of the first item in row 1.
+        # If row 1 was empty, this would need a fallback, but given the logic,
+        # if archetype_for_row2 exists, row 1 (archetypes_for_row1) is guaranteed to be populated.
+        option_x_row2 = start_x_for_row1 
         
-        rect = pygame.Rect(option_x, current_y, option_width, option_height)
-        archetype["rect"] = rect # Store for click detection
-
-        # Draw border and fill
-        border_color = STORE_BUTTON_HOVER_COLOR if rect.collidepoint(mouse_pos) else settings.WHITE
-        pygame.draw.rect(surface, settings.STEEL_BLUE, rect, border_radius=10) # Background
-        pygame.draw.rect(surface, border_color, rect, width=3, border_radius=10) # Border
-
-        circle_center_x = option_x + option_width / 2
-        circle_center_y = current_y + 40 # Position circle towards the top
-
-        visual_element_bottom_y = 0 # Initialize to store the y-coord for positioning text below
-
-        # Draw character representation
-        if archetype["id"] == "standard" and standard_player_image:
-            img_rect = standard_player_image.get_rect(center=(circle_center_x, circle_center_y))
-            surface.blit(standard_player_image, img_rect)
-            visual_element_bottom_y = img_rect.bottom
-        elif archetype["id"] == "triple_shot" and triple_shot_player_image:
-            img_rect = triple_shot_player_image.get_rect(center=(circle_center_x, circle_center_y))
-            surface.blit(triple_shot_player_image, img_rect)
-            visual_element_bottom_y = img_rect.bottom
-        elif archetype["id"] == "nova_burst" and nova_burst_player_image:
-            img_rect = nova_burst_player_image.get_rect(center=(circle_center_x, circle_center_y))
-            surface.blit(nova_burst_player_image, img_rect)
-            visual_element_bottom_y = img_rect.bottom
-        else: # Fallback to circle for other archetypes or if image fails to load
-            default_circle_radius = 20
-            pygame.draw.circle(surface, archetype["color"], (circle_center_x, circle_center_y), default_circle_radius)
-            visual_element_bottom_y = circle_center_y + default_circle_radius
-
-        # Draw name
-        name_surf = title_font.render(archetype["name"], True, settings.WHITE)
-        name_rect = name_surf.get_rect(center=(circle_center_x, visual_element_bottom_y + 25)) # Position below the visual
-        surface.blit(name_surf, name_rect)
-
-        # Draw description (simple, one line for now, can be improved with text wrapping)
-        desc_lines = archetype["description"].splitlines() # Basic split, can be more robust
-        line_y_offset = name_rect.bottom + 10 # Position description below the name
-        for line_idx, line_text in enumerate(desc_lines): # Ensure description is drawn below image/circle
-            desc_surf = desc_font.render(line_text, True, settings.LIGHT_SKY_BLUE) # Smaller font for description
-            desc_rect = desc_surf.get_rect(center=(circle_center_x, line_y_offset + line_idx * (desc_font.get_height() + 2)))
-            surface.blit(desc_surf, desc_rect)
-
+        _draw_single_archetype_card(surface, archetype_for_row2, option_x_row2, y_pos_row2,
+                                    option_width, option_height, mouse_pos, title_font, desc_font,
+                                    standard_player_image, triple_shot_player_image,
+                                    nova_burst_player_image, bouncing_shot_player_image)
 
 
 while running:
@@ -732,8 +878,8 @@ while running:
                 effective_shoot_cooldown = SHOOT_COOLDOWN * selected_player_archetype["shoot_cooldown_modifier"]
                 
                 # Allow shooting even if no enemies for Nova, for others require enemies
-                can_shoot_condition = enemies or selected_player_archetype["id"] == "nova_burst"
-                # Removed keys[pygame.K_SPACE] check for automatic shooting
+                can_shoot_condition = enemies or selected_player_archetype["id"] in ["nova_burst", "bouncing_shot"]
+
                 if (current_time - last_shot_time > effective_shoot_cooldown) and can_shoot_condition:
                     last_shot_time = current_time
                     shoot_func = SHOOT_FUNCTIONS[selected_player_archetype["shoot_function_name"]]
@@ -777,9 +923,13 @@ while running:
                         enemies.append(HexagonEnemy(pygame.Vector2(world_cx, world_cy), screen_w, screen_h))
             
             # Update Projectiles (Player Shots)
+            world_bounds_for_particles = None
+            if TILE_WIDTH > 0 and TILE_HEIGHT > 0: # If world map exists
+                world_bounds_for_particles = (WORLD_TILES_X * TILE_WIDTH, WORLD_TILES_Y * TILE_HEIGHT)
+
             for particle in particles[:]:
-                particle.update(dt)
-                if particle.is_offscreen(screen.get_width(), screen.get_height(), camera_offset):
+                particle.update(dt, screen.get_width(), screen.get_height(), camera_offset, world_bounds_for_particles)
+                if not particle.is_alive(screen.get_width(), screen.get_height(), camera_offset, world_bounds_for_particles):
                     particles.remove(particle)
 
             # Enemy Update
@@ -935,6 +1085,8 @@ while running:
                     trail_image_base = triple_shot_player_image
                 elif selected_player_archetype["id"] == "nova_burst" and nova_burst_player_image:
                     trail_image_base = nova_burst_player_image
+                elif selected_player_archetype["id"] == "bouncing_shot" and bouncing_shot_player_image:
+                    trail_image_base = bouncing_shot_player_image
 
                 num_trail_segments = len(player_trail_positions)
                 for i, trail_world_pos in enumerate(player_trail_positions):
@@ -985,6 +1137,10 @@ while running:
         elif selected_player_archetype and selected_player_archetype["id"] == "nova_burst" and nova_burst_player_image:
             player_image_rect = nova_burst_player_image.get_rect(center=player_screen_pos)
             screen.blit(nova_burst_player_image, player_image_rect)
+            drawn_player_bottom_y = player_image_rect.bottom
+        elif selected_player_archetype and selected_player_archetype["id"] == "bouncing_shot" and bouncing_shot_player_image:
+            player_image_rect = bouncing_shot_player_image.get_rect(center=player_screen_pos)
+            screen.blit(bouncing_shot_player_image, player_image_rect)
             drawn_player_bottom_y = player_image_rect.bottom
         elif selected_player_archetype: # Other archetypes or fallback
             player_draw_color = selected_player_archetype["color"]
