@@ -28,6 +28,23 @@ CRIMSON = pygame.Color("#740B20")
 ORANGE_RED = pygame.Color("#FF4500") # For Hexagon Enemy
 GOLD = pygame.Color("#FFF200") # For pickup particles
 DARK_BLUE = pygame.Color("#00008B") # For store background
+FOREST_GREEN = (34, 139, 34)
+LIGHT_GREEN = pygame.Color("#90EE90")
+ORCHID = pygame.Color("#DA70D6")
+SLATE_GRAY = pygame.Color("#708090")
+FIREBRICK = pygame.Color("#B22222")
+ROYAL_BLUE = pygame.Color("#4169E1")
+GOLDENROD = pygame.Color("#DAA520")
+MEDIUM_SEA_GREEN = pygame.Color("#3CB371")
+INDIAN_RED = pygame.Color("#CD5C5C")
+PERU = pygame.Color("#CD853F")
+CADET_BLUE = pygame.Color("#5F9EA0")
+DARK_ORCHID = pygame.Color("#9932CC")
+LIME_GREEN = pygame.Color("#32CD32")
+NAVY = pygame.Color("#000080")
+
+
+
 
 # --- Background Color Cycling ---
 BG_CYCLE_COLORS = [
@@ -36,6 +53,9 @@ BG_CYCLE_COLORS = [
     PETROL,
     DARK_BLUE,
     VIOLET,
+    PERU,
+    TEAL,
+    FOREST_GREEN,
 ]
 BG_COLOR_TRANSITION_SPEED = 0.02
 
@@ -79,7 +99,7 @@ SPECIAL_PICKUP_WIDTH = 15
 SPECIAL_PICKUP_HEIGHT = 22
 
 # --- Player Archetype Colors (add new color) ---
-FOREST_GREEN = (34, 139, 34)
+
 
 # --- Sound Effect Paths (add new sound path) ---
 SOUND_BOUNCING_SHOT_PATH = "audio/bouncing_shot.wav"
@@ -88,7 +108,7 @@ SOUND_BOUNCING_SHOT_PATH = "audio/bouncing_shot.wav"
 BOUNCING_PARTICLE_LIFETIME = 7  # seconds
 BOUNCING_PARTICLE_SPEED = 220
 BOUNCING_PARTICLE_RADIUS = 10
-BOUNCING_PARTICLE_COLOR = FOREST_GREEN # Or any other color
+BOUNCING_PARTICLE_COLOR = CORAL # Or any other color
 BOUNCING_PARTICLE_MAX_BOUNCES = 5
 # If True and world map exists, bounces off world edges. Otherwise, bounces off visible screen edges.
 BOUNCING_PARTICLE_USE_WORLD_BOUNDS = False

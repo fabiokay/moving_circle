@@ -348,6 +348,22 @@ class BouncingParticle(Particle):
             self.bounces_left -= 1
             # if self.bounce_sound: self.bounce_sound.play()
 
+    def bounce_off_object(self, object_center_pos, object_radius):
+        """Handles the reflection of the particle's direction off a circular object."""
+        # Normal vector from object center to particle center
+        collision_normal = self.pos - object_center_pos
+        if collision_normal.length_squared() > 0:
+            collision_normal.normalize_ip()
+            
+            # Reflect direction: D_new = D_old - 2 * (D_old.dot(N)) * N
+            reflection_component = 2 * self.direction.dot(collision_normal) * collision_normal
+            self.direction -= reflection_component
+            self.direction.normalize_ip() # Ensure it's still a unit vector
+
+            # Nudge particle slightly away from the object to prevent immediate re-collision
+            # Place it just outside the combined radii plus a small epsilon
+            self.pos = object_center_pos + collision_normal * (object_radius + self.radius + 0.1)
+
     def is_alive(self, screen_width, screen_height, camera_offset, world_bounds=None):
         return self.age < self.lifetime and self.bounces_left >= 0
 
@@ -959,7 +975,20 @@ while running:
                         enemy_col_radius = enemy.radius_stat # Hexagon radius (center to vertex)
 
                     if (particle.pos - enemy.pos).length_squared() < (particle.radius + enemy_col_radius)**2:
-                        if particle in particles: particles.remove(particle) # Check if still exists
+                        should_remove_particle = True
+                        
+                        if isinstance(particle, BouncingParticle):
+                            if particle.bounces_left > 0:
+                                particle.bounce_off_object(enemy.pos, enemy_col_radius)
+                                particle.bounces_left -= 1
+                                # Consider adding a specific sound for enemy bounce if desired
+                                # if particle.bounce_sound: particle.bounce_sound.play()
+                                should_remove_particle = False # Don't remove if it bounced and has bounces left
+                            # If bounces_left is 0 (or becomes <0 after decrement), it will be removed
+
+                        if should_remove_particle and particle in particles:
+                            particles.remove(particle) # Check if still exists before removing
+                        
                         destroyed = enemy.take_damage() if hasattr(enemy, 'take_damage') else True
                         if enemy_hit_sound and destroyed: # Play sound if destroyed and sounds are loaded
                             random.choice(enemy_hit_sound).play()
@@ -972,7 +1001,10 @@ while running:
 
                             kill_count += 1 # Increment kill count
                             if enemy in enemies: enemies.remove(enemy) # Check if still exists
-                        break # Particle can only hit one enemy
+                        
+                        # Particle interacts with one enemy per collision pass.
+                        # If it was a standard particle, it's removed. If bouncing, it has bounced.
+                        break 
 
             # Collision: Player vs Pickup Particle
             pickups_to_keep = []
