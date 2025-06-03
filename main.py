@@ -410,7 +410,7 @@ PLAYER_ARCHETYPES = [
         "name": "Ricochet",
         "color": settings.FOREST_GREEN,
         "description": "Bouncing shot",
-        "shoot_cooldown_modifier": 1.25,
+        "shoot_cooldown_modifier": 0.8,
         "shoot_function_name": "shoot_bouncing"
     }
 ]
@@ -446,20 +446,10 @@ def shoot_bouncing(player_world_pos, all_enemies, particle_list, particle_color_
     if bouncing_shot_sound:
         bouncing_shot_sound.play()
 
-    target_direction = pygame.Vector2(0, -1) # Default: up
-
-    if all_enemies:
-        nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
-        if (nearest_enemy.pos - player_world_pos).length_squared() > 0:
-            target_direction = (nearest_enemy.pos - player_world_pos).normalize()
-    else:
-        # Aim towards mouse cursor if no enemies
-        mouse_screen_pos = pygame.mouse.get_pos()
-        mouse_world_pos = pygame.Vector2(mouse_screen_pos[0] + camera_offset_for_aiming.x, 
-                                         mouse_screen_pos[1] + camera_offset_for_aiming.y)
-        if (mouse_world_pos - player_world_pos).length_squared() > 0:
-            target_direction = (mouse_world_pos - player_world_pos).normalize()
-
+    # Generate a random direction
+    random_angle = random.uniform(0, 2 * math.pi) # Angle in radians
+    target_direction = pygame.Vector2(math.cos(random_angle), math.sin(random_angle)).normalize()
+    
     far_target_pos = player_world_pos + target_direction * 100 # For initial direction calculation
 
     particle_list.append(BouncingParticle(

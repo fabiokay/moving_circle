@@ -81,18 +81,15 @@ SPECIAL_PICKUP_HEIGHT = 22
 # --- Player Archetype Colors (add new color) ---
 FOREST_GREEN = (34, 139, 34)
 
-# --- Player Image Paths (add new image path) ---
-
-
 # --- Sound Effect Paths (add new sound path) ---
 SOUND_BOUNCING_SHOT_PATH = "audio/bouncing_shot.wav"
 
 # --- Bouncing Projectile Settings ---
-BOUNCING_PARTICLE_LIFETIME = 3.5  # seconds
+BOUNCING_PARTICLE_LIFETIME = 7  # seconds
 BOUNCING_PARTICLE_SPEED = 220
-BOUNCING_PARTICLE_RADIUS = 6
+BOUNCING_PARTICLE_RADIUS = 10
 BOUNCING_PARTICLE_COLOR = FOREST_GREEN # Or any other color
-BOUNCING_PARTICLE_MAX_BOUNCES = 3
+BOUNCING_PARTICLE_MAX_BOUNCES = 5
 # If True and world map exists, bounces off world edges. Otherwise, bounces off visible screen edges.
 BOUNCING_PARTICLE_USE_WORLD_BOUNDS = False
 
