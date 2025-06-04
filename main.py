@@ -5,6 +5,7 @@ import sys # For pygame.quit()
 import pygame.mixer
 import math # For hexagon drawing
 import settings # Import your new settings file
+import audio
 
 # pygame setup
 pygame.init()
@@ -40,13 +41,13 @@ nova_burst_player_image = None # For player_3.png
 bouncing_shot_player_image = None # For the new bouncing shot player
 
 try:
-    background_music_stage_1 = pygame.mixer.Sound(settings.SOUND_BG_MUSIC_PATH)
+    background_music_stage_1 = pygame.mixer.Sound(audio.BACKGROUND_MUSIC_STAGE_1)
     if background_music_stage_1:
         background_music_stage_1.set_volume(0.1) # Set volume to 50%
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
     nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
     triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
-    bouncing_shot_sound = pygame.mixer.Sound(settings.SOUND_BOUNCING_SHOT_PATH)
+    bouncing_shot_sound = pygame.mixer.Sound(audio.BOUNCING_SHOT)
     # damaging_aura_sound = pygame.mixer.Sound("audio/damaging_aura.wav") # Example if you have it
     pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
     enemy_hit_sound = [

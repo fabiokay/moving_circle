@@ -98,12 +98,6 @@ PICKUP_PARTICLE_HEIGHT = 20
 SPECIAL_PICKUP_WIDTH = 15
 SPECIAL_PICKUP_HEIGHT = 22
 
-# --- Player Archetype Colors (add new color) ---
-
-
-# --- Sound Effect Paths (add new sound path) ---
-SOUND_BOUNCING_SHOT_PATH = "audio/bouncing_shot.wav"
-
 # --- Bouncing Projectile Settings ---
 BOUNCING_PARTICLE_LIFETIME = 7  # seconds
 BOUNCING_PARTICLE_SPEED = 220
