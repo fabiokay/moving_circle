@@ -215,11 +215,13 @@ class SquareEnemy:
                            self.size, self.size)
         pygame.draw.rect(surface, self.color, rect)
 
-    def take_damage(self):
-        self.health -= 1
+
+    def take_damage(self, damage_amount=1): # Add damage_amount parameter
+        self.health -= damage_amount
         if self.health <= 0:
             return True # Destroyed
         return False # Still alive
+
 
 # --- Enemy Hexagon Setup ---
 class HexagonEnemy:
@@ -261,12 +263,43 @@ class HexagonEnemy:
             points.append((x, y))
         pygame.draw.polygon(surface, self.color, points)
 
-    def take_damage(self):
-        self.health -= 1
+    def take_damage(self, damage_amount=1): # Add damage_amount parameter
+        self.health -= damage_amount
         if self.health <= 0:
             return True # Destroyed
         return False # Still alive
+
     
+# --- Orbital Weapon Setup ---
+class OrbitalWeapon:
+    def __init__(self, player_pos_ref, orbit_distance=settings.ORBITAL_WEAPON_ORBIT_DISTANCE, 
+                 rotation_speed=settings.ORBITAL_WEAPON_ROTATION_SPEED, 
+                 color=settings.ORBITAL_WEAPON_COLOR, radius=settings.ORBITAL_WEAPON_RADIUS,
+                 damage=settings.ORBITAL_WEAPON_DAMAGE):
+        self.player_pos_ref = player_pos_ref # Reference to the player's position vector
+        self.orbit_distance = orbit_distance
+        self.rotation_speed = rotation_speed  # Degrees per second
+        self.current_angle = 0  # Degrees
+        self.color = color
+        self.radius = radius
+        self.damage = damage
+        self.pos = pygame.Vector2(0, 0) # Will be updated relative to player
+        self.last_hit_times = {} # enemy_id: time_of_last_hit
+        self.hit_cooldown = settings.ORBITAL_WEAPON_HIT_COOLDOWN # Seconds
+
+    def update(self, dt):
+        self.current_angle = (self.current_angle + self.rotation_speed * dt) % 360
+        rad_angle = math.radians(self.current_angle)
+        
+        # Calculate position relative to the player's current position
+        offset_x = self.orbit_distance * math.cos(rad_angle)
+        offset_y = self.orbit_distance * math.sin(rad_angle)
+        self.pos = self.player_pos_ref + pygame.Vector2(offset_x, offset_y)
+
+    def draw(self, surface, camera_offset):
+        screen_pos = self.pos - camera_offset
+        pygame.draw.circle(surface, self.color, (int(screen_pos.x), int(screen_pos.y)), self.radius)
+
 # --- Pickup Particle Setup ---
 class PickupParticle:
     def __init__(self, pos, color=settings.GOLD, width=settings.PICKUP_PARTICLE_WIDTH, height=settings.PICKUP_PARTICLE_HEIGHT, value=1):
@@ -390,6 +423,7 @@ movement_speed = settings.INITIAL_MOVEMENT_SPEED  # Player movement speed, made 
 player_level = settings.INITIAL_PLAYER_LEVEL
 player_pickup_radius_multiplier = 1.0 # For pickup radius upgrade
 max_player_health = settings.INITIAL_PLAYER_HEALTH # Max health can be upgraded
+active_orbital_weapons = [] # List to store active orbital weapons
 current_player_health = settings.INITIAL_PLAYER_HEALTH
 
 # --- Player Health Bar UI ---
@@ -533,6 +567,7 @@ MASTER_STORE_ITEMS = [
     {"id": "max_health", "text": "Max Health+", "cost_text": "(Full Bar)"},
     {"id": "pickup_radius", "text": "Pickup Radius+", "cost_text": "(Full Bar)"},
     {"id": "heal_fully", "text": "Heal Fully", "cost_text": "(Full Bar)"},
+    {"id": "orbital_weapon", "text": "Orbital Guard", "cost_text": "(Full Bar)"},
     # Add more items here, e.g.:
     # {"id": "damage_boost", "text": "Damage Boost", "cost_text": "(Full Bar)"},
     # {"id": "temp_invincibility", "text": "Brief Shield", "cost_text": "(Full Bar)"},
@@ -545,7 +580,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -564,6 +599,7 @@ def reset_game_state():
     particles.clear() # Player shots
     pickup_particles.clear() # Gold particles
     player_trail_positions.clear() # Clear player trail
+    active_orbital_weapons.clear() # Clear any active orbital weapons
 
     total_game_time_seconds = 0.0
     current_pickups_count = 0
@@ -834,6 +870,12 @@ while running:
                         elif item["id"] == "heal_fully":
                             current_player_health = max_player_health
                             print(f"Healed Fully! Health: {current_player_health}/{max_player_health}")
+                        elif item["id"] == "orbital_weapon":
+                            # For now, let's assume only one can be active or they stack somehow
+                            # This adds a new one each time. You might want to limit this or enhance existing.
+                            new_orbital = OrbitalWeapon(player_pos) # Pass the actual player_pos Vector2 object
+                            active_orbital_weapons.append(new_orbital)
+                            print(f"Orbital Guard activated! Count: {len(active_orbital_weapons)}")
 
                         # Increase the requirement for the next bar fill
                         MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)
@@ -974,6 +1016,10 @@ while running:
             for enemy in enemies: # No need to copy if not removing during iteration here
                 enemy.update(player_pos, dt)
 
+            # Update Orbital Weapons
+            for orbital in active_orbital_weapons:
+                orbital.update(dt) # player_pos is already a reference, so it uses the current player_pos
+
             # Enemy-Enemy Collision Resolution (to prevent stacking)
             for i, enemy1 in enumerate(enemies):
                 for j in range(i + 1, len(enemies)):
@@ -1038,6 +1084,33 @@ while running:
                         # If it was a standard particle, it's removed. If bouncing, it has bounced.
                         break 
 
+            # Collision: Orbital Weapon vs Enemy
+            current_time_seconds = total_game_time_seconds # Use consistent game time
+            for orbital in active_orbital_weapons:
+                for enemy in enemies[:]: # Iterate over a copy for safe removal
+                    enemy_col_radius = 0
+                    if isinstance(enemy, EnemyTriangle):
+                        enemy_col_radius = enemy.height * 0.5
+                    elif isinstance(enemy, SquareEnemy):
+                        enemy_col_radius = enemy.size * 0.707
+                    elif isinstance(enemy, HexagonEnemy):
+                        enemy_col_radius = enemy.radius_stat
+
+                    if (orbital.pos - enemy.pos).length_squared() < (orbital.radius + enemy_col_radius)**2:
+                        # Check cooldown for this specific enemy
+                        enemy_id = id(enemy) # Get a unique ID for the enemy instance
+                        last_hit = orbital.last_hit_times.get(enemy_id, 0)
+                        if current_time_seconds - last_hit > orbital.hit_cooldown:
+                            orbital.last_hit_times[enemy_id] = current_time_seconds
+                            
+                            destroyed = enemy.take_damage(orbital.damage) if hasattr(enemy, 'take_damage') else True # Pass orbital's damage
+                            if enemy_hit_sound: # Play sound regardless of destruction for orbitals
+                                random.choice(enemy_hit_sound).play()
+                            if destroyed:
+                                if random.random() < SPECIAL_PICKUP_CHANCE: pickup_particles.append(PickupParticle(enemy.pos, color=settings.SPECIAL_PICKUP_COLOR, width=settings.SPECIAL_PICKUP_WIDTH, height=settings.SPECIAL_PICKUP_HEIGHT, value=settings.SPECIAL_PICKUP_VALUE))
+                                else: pickup_particles.append(PickupParticle(enemy.pos, value=1))
+                                kill_count += 1
+                                if enemy in enemies: enemies.remove(enemy)
             # Collision: Player vs Pickup Particle
             pickups_to_keep = []
             for pickup in pickup_particles:
@@ -1178,6 +1251,10 @@ while running:
                 else: # SquareEnemy
                     enemy.draw(screen, camera_offset)
         
+        # Draw Orbital Weapons (drawn on top of enemies, under player if desired, or adjust order)
+        for orbital in active_orbital_weapons:
+            orbital.draw(screen, camera_offset)
+
         # Draw player
         player_screen_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
         drawn_player_bottom_y = player_screen_pos.y + player_radius # Default for circle

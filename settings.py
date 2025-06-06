@@ -107,6 +107,14 @@ BOUNCING_PARTICLE_MAX_BOUNCES = 5
 # If True and world map exists, bounces off world edges. Otherwise, bounces off visible screen edges.
 BOUNCING_PARTICLE_USE_WORLD_BOUNDS = False
 
+# --- Orbital weapon settings ---
+ORBITAL_WEAPON_ORBIT_DISTANCE = 50
+ORBITAL_WEAPON_RADIUS = 20
+ORBITAL_WEAPON_ROTATION_SPEED = 100
+ORBITAL_WEAPON_COLOR = LIGHT_GREEN # Color of the orbital weapon
+ORBITAL_WEAPON_DAMAGE = 1
+ORBITAL_WEAPON_HIT_COOLDOWN = 3  # seconds
+
 
 # --- UI Bar ---
 BAR_HEIGHT = 25
