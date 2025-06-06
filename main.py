@@ -689,7 +689,7 @@ def reset_game_state():
     enemies.clear()
     particles.clear() # Player shots
     pickup_particles.clear() # Gold particles
-    player_trail_positions.clear() # Clear player trail
+    player_trail_positions.clear() # For player trail
     active_orbital_weapons.clear() # Clear any active orbital weapons
     boomerang_projectiles.clear() # Clear boomerangs
 
@@ -1318,6 +1318,7 @@ while running:
                         player_level += 1 # Increment level when bar is full
                         populate_store_offerings() # Choose items for the store
                         MAX_ENEMIES = int(MAX_ENEMIES * 1.25) # Increase max enemies
+                        ENEMY_SPAWN_INTERVAL = max(0.5, ENEMY_SPAWN_INTERVAL * 0.9) # Decrease spawn interval, with a minimum limit
                         store_active = True
                         current_pickups_count = MAX_PICKUPS_FOR_FULL_BAR # Cap it
                 else:
