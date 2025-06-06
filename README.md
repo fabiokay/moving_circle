@@ -38,6 +38,7 @@ A dynamic 2D survival game built with Pygame. Choose your vessel, automatically 
     *   Available upgrades:
         *   **Faster Shots:** Increases your rate of fire.
         *   **Player Speed+:** Increases your movement speed.
+        *   **Pickup Radius+:** Increases the radius for collecting particles, making it easier to gather them.
     *   The particle requirement for upgrades increases after each purchase.
 *   **Player Leveling:** Increase your level each time you fill the pickup bar.
 *   **Tiled Map & Camera:** The game world is a scrollable, tiled map with defined boundaries. The camera follows the player.
