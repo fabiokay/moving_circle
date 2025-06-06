@@ -126,6 +126,8 @@ BOOMERANG_WEAPON_SHOOT_COOLDOWN = 1.8 # seconds
 BOOMERANG_TURN_DELAY = 0.75 # seconds after launch before it starts slowing down
 BOOMERANG_SLOWING_DURATION = 0.3 # seconds it takes to slow down to zero speed
 BOOMERANG_RETURN_ACCELERATION = BOOMERANG_PROJECTILE_SPEED / 0.4 # Speed / time_to_reach_max_speed_on_return
+BOOMERANG_INITIAL_COUNT = 1
+BOOMERANG_MAX_COUNT = 5 # Maximum number of boomerangs that can be fired at once
 
 # --- UI Bar ---
 BAR_HEIGHT = 25

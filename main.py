@@ -486,6 +486,7 @@ particles = []
 # SHOOT_COOLDOWN will be initialized from settings.INITIAL_SHOOT_COOLDOWN
 last_shot_time = 0.0
 
+num_boomerangs_to_fire = 0 # Will be set to BOOMERANG_INITIAL_COUNT when first acquired
 boomerang_projectiles = [] # List to store active boomerang projectiles
 has_boomerang_weapon = False
 last_boomerang_shot_time = 0.0
@@ -639,7 +640,7 @@ MASTER_STORE_ITEMS = [
     {"id": "max_health", "text": "Max Health+", "cost_text": "(Full Bar)"},
     {"id": "pickup_radius", "text": "Pickup Radius+", "cost_text": "(Full Bar)"},
     {"id": "heal_fully", "text": "Heal Fully", "cost_text": "(Full Bar)"},
-    {"id": "boomerang_weapon", "text": "Boomerang", "cost_text": "(Full Bar)"},
+    {"id": "boomerang_weapon", "text": "Boomerang+", "cost_text": "(Full Bar)"}, # Changed text
     {"id": "orbital_weapon", "text": "Orbital Guard", "cost_text": "(Full Bar)"},
     # Add more items here, e.g.:
     # {"id": "damage_boost", "text": "Damage Boost", "cost_text": "(Full Bar)"},
@@ -653,7 +654,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons, MAX_ENEMIES, boomerang_projectiles, has_boomerang_weapon, last_boomerang_shot_time
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons, MAX_ENEMIES, boomerang_projectiles, has_boomerang_weapon, last_boomerang_shot_time, num_boomerangs_to_fire
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -685,6 +686,7 @@ def reset_game_state():
     max_player_health = settings.INITIAL_PLAYER_HEALTH
     current_player_health = max_player_health
     player_pickup_radius_multiplier = 1.0
+    num_boomerangs_to_fire = 0 # Reset, will be set to initial when first bought
     has_boomerang_weapon = False
 
     kill_count = 0 # Reset kill count
@@ -706,14 +708,15 @@ def reset_game_state():
 
 # --- Populate Store with Random Items ---
 def populate_store_offerings():
-    global displayed_store_items, has_boomerang_weapon, active_orbital_weapons # Make globals accessible
+    global displayed_store_items, has_boomerang_weapon, active_orbital_weapons, num_boomerangs_to_fire # Make globals accessible
     displayed_store_items.clear()
 
     available_master_items = []
     for item_template in MASTER_STORE_ITEMS:
         can_add = True
-        if item_template["id"] == "boomerang_weapon" and has_boomerang_weapon:
-            can_add = False
+        if item_template["id"] == "boomerang_weapon":
+            if has_boomerang_weapon and num_boomerangs_to_fire >= settings.BOOMERANG_MAX_COUNT:
+                can_add = False # Don't offer if maxed out
         # Example for limiting orbital weapons if desired (currently stackable)
         # MAX_ORBITAL_WEAPONS_ALLOWED = 1 # Define in settings
         # if item_template["id"] == "orbital_weapon" and len(active_orbital_weapons) >= MAX_ORBITAL_WEAPONS_ALLOWED:
@@ -966,9 +969,13 @@ while running:
                             active_orbital_weapons.append(new_orbital)
                             print(f"Orbital Guard activated! Count: {len(active_orbital_weapons)}")
                         elif item["id"] == "boomerang_weapon":
-                            if not has_boomerang_weapon: # Check to prevent re-activating if somehow offered again
+                            if not has_boomerang_weapon:
                                 has_boomerang_weapon = True
-                                print("Boomerang Weapon activated!")
+                                num_boomerangs_to_fire = settings.BOOMERANG_INITIAL_COUNT
+                                print(f"Boomerang Weapon acquired! Firing {num_boomerangs_to_fire} boomerang(s).")
+                            elif num_boomerangs_to_fire < settings.BOOMERANG_MAX_COUNT:
+                                num_boomerangs_to_fire += 1
+                                print(f"Boomerang Upgraded! Now firing {num_boomerangs_to_fire} boomerang(s).")
 
                         # Increase the requirement for the next bar fill
                         MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)
@@ -1062,8 +1069,20 @@ while running:
             if has_boomerang_weapon and enemies and \
                (current_time - last_boomerang_shot_time > settings.BOOMERANG_WEAPON_SHOOT_COOLDOWN):
                 last_boomerang_shot_time = current_time
-                nearest_enemy = min(enemies, key=lambda e: (e.pos - player_pos).length_squared())
-                boomerang_projectiles.append(BoomerangProjectile(player_pos.copy(), nearest_enemy.pos.copy()))
+                
+                # Find the single nearest enemy for the central boomerang
+                nearest_enemy = min(enemies, key=lambda e: (e.pos - player_pos).length_squared(), default=None)
+                if nearest_enemy:
+                    base_direction_to_enemy = (nearest_enemy.pos - player_pos).normalize() if (nearest_enemy.pos - player_pos).length_squared() > 0 else pygame.Vector2(0, -1)
+                    
+                    # Spread angle for multiple boomerangs (e.g., 10 degrees between each)
+                    spread_angle_deg = 10 
+                    total_angle_span = (num_boomerangs_to_fire - 1) * spread_angle_deg
+                    start_angle_offset = -total_angle_span / 2
+                    for i in range(num_boomerangs_to_fire):
+                        angle_offset = start_angle_offset + i * spread_angle_deg
+                        shot_direction = base_direction_to_enemy.rotate(angle_offset)
+                        boomerang_projectiles.append(BoomerangProjectile(player_pos.copy(), player_pos + shot_direction * 100)) # Target is a far point in that direction
                 if boomerang_shot_sound:
                     boomerang_shot_sound.play()
 
