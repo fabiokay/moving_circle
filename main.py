@@ -580,7 +580,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons, MAX_ENEMIES
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -606,6 +606,7 @@ def reset_game_state():
     MAX_PICKUPS_FOR_FULL_BAR = settings.INITIAL_MAX_PICKUPS_FOR_FULL_BAR
     SHOOT_COOLDOWN = settings.INITIAL_SHOOT_COOLDOWN
     movement_speed = settings.INITIAL_MOVEMENT_SPEED
+    MAX_ENEMIES = settings.MAX_ENEMIES # Reset MAX_ENEMIES to initial value
     player_level = settings.INITIAL_PLAYER_LEVEL
     max_player_health = settings.INITIAL_PLAYER_HEALTH
     current_player_health = max_player_health
@@ -1128,8 +1129,10 @@ while running:
                     if current_pickups_count < MAX_PICKUPS_FOR_FULL_BAR:
                         current_pickups_count += pickup.value
                     if current_pickups_count >= MAX_PICKUPS_FOR_FULL_BAR and not store_active: # Check store_active again
+                        # Level up!
                         player_level += 1 # Increment level when bar is full
                         populate_store_offerings() # Choose items for the store
+                        MAX_ENEMIES = int(MAX_ENEMIES * 1.25) # Increase max enemies
                         store_active = True
                         current_pickups_count = MAX_PICKUPS_FOR_FULL_BAR # Cap it
                 else:
