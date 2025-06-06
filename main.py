@@ -36,6 +36,7 @@ enemy_hit_sound = []
 player_death_sound = None
 select_archetype_sound = None
 standard_player_image = None # For player_1.png
+boomerang_shot_sound = None # For boomerang weapon
 triple_shot_player_image = None # For player_2.png
 nova_burst_player_image = None # For player_3.png
 bouncing_shot_player_image = None # For the new bouncing shot player
@@ -47,6 +48,7 @@ try:
     standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
     nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
     triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
+    boomerang_shot_sound = pygame.mixer.Sound(audio.BOOMERANG_SHOT_SOUND)
     bouncing_shot_sound = pygame.mixer.Sound(audio.BOUNCING_SHOT)
     # damaging_aura_sound = pygame.mixer.Sound("audio/damaging_aura.wav") # Example if you have it
     pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
@@ -401,6 +403,56 @@ class BouncingParticle(Particle):
     def is_alive(self, screen_width, screen_height, camera_offset, world_bounds=None):
         return self.age < self.lifetime and self.bounces_left >= 0
 
+# --- Boomerang Projectile Setup ---
+class BoomerangProjectile(Particle):
+    def __init__(self, start_pos, initial_target_pos,
+                 color=settings.BOOMERANG_PROJECTILE_COLOR,
+                 speed=settings.BOOMERANG_PROJECTILE_SPEED,
+                 radius=settings.BOOMERANG_PROJECTILE_RADIUS,
+                 lifetime=settings.BOOMERANG_PROJECTILE_LIFETIME,
+                 damage=settings.BOOMERANG_PROJECTILE_DAMAGE):
+        super().__init__(start_pos, initial_target_pos, color, speed, radius)
+        self.initial_target_pos = pygame.Vector2(initial_target_pos)
+        self.lifetime = lifetime
+        self.age = 0.0
+        self.damage = damage
+        self.state = "to_target"  # "to_target" or "returning"
+        self.hit_enemies_this_pass = set() # Store IDs of enemies hit in current pass
+        self.turn_distance_threshold_sq = 15**2 # How close to target before turning (squared)
+
+    def update(self, dt, player_pos_not_used_for_simple_return, world_bounds=None): # player_pos might be needed for smarter return
+        self.age += dt
+        if not self.is_alive(0,0,None,None): # Basic lifetime check
+            return
+
+        if self.state == "to_target":
+            # Check if close enough to initial_target_pos to turn
+            if (self.initial_target_pos - self.pos).length_squared() < self.turn_distance_threshold_sq:
+                self.state = "returning"
+                self.direction *= -1  # Reverse direction
+                self.hit_enemies_this_pass.clear() # Allow hitting enemies again
+            else:
+                # If direction was zero (e.g. spawned on target), set a default return direction
+                if self.direction.length_squared() == 0:
+                    self.direction = pygame.Vector2(0, -1) # Default upwards
+                    self.state = "returning"
+                    self.hit_enemies_this_pass.clear()
+
+        # Common movement for both states (direction might have been updated)
+        self.pos += self.direction * self.speed * dt
+
+    def draw(self, surface, camera_offset):
+        # Could add a slight rotation or different visual for boomerang
+        super().draw(surface, camera_offset)
+
+    def is_alive(self, screen_width_unused, screen_height_unused, camera_offset_unused, world_bounds_unused):
+        return self.age < self.lifetime
+
+    def on_hit_enemy(self):
+        # Boomerangs are not destroyed on hit, they continue until lifetime ends.
+        # Logic to prevent multi-hits per pass is handled with self.hit_enemies_this_pass
+        pass
+
 # --- Enemy Variables ---
 enemies = []
 enemy_spawn_timer = 0.0
@@ -417,6 +469,10 @@ SPECIAL_PICKUP_VALUE = settings.SPECIAL_PICKUP_VALUE
 particles = []
 # SHOOT_COOLDOWN will be initialized from settings.INITIAL_SHOOT_COOLDOWN
 last_shot_time = 0.0
+
+boomerang_projectiles = [] # List to store active boomerang projectiles
+has_boomerang_weapon = False
+last_boomerang_shot_time = 0.0
 
 # --- Player Variables ---
 movement_speed = settings.INITIAL_MOVEMENT_SPEED  # Player movement speed, made global for upgrades
@@ -567,6 +623,7 @@ MASTER_STORE_ITEMS = [
     {"id": "max_health", "text": "Max Health+", "cost_text": "(Full Bar)"},
     {"id": "pickup_radius", "text": "Pickup Radius+", "cost_text": "(Full Bar)"},
     {"id": "heal_fully", "text": "Heal Fully", "cost_text": "(Full Bar)"},
+    {"id": "boomerang_weapon", "text": "Boomerang", "cost_text": "(Full Bar)"},
     {"id": "orbital_weapon", "text": "Orbital Guard", "cost_text": "(Full Bar)"},
     # Add more items here, e.g.:
     # {"id": "damage_boost", "text": "Damage Boost", "cost_text": "(Full Bar)"},
@@ -580,7 +637,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons, MAX_ENEMIES
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons, MAX_ENEMIES, boomerang_projectiles, has_boomerang_weapon, last_boomerang_shot_time
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -600,6 +657,7 @@ def reset_game_state():
     pickup_particles.clear() # Gold particles
     player_trail_positions.clear() # Clear player trail
     active_orbital_weapons.clear() # Clear any active orbital weapons
+    boomerang_projectiles.clear() # Clear boomerangs
 
     total_game_time_seconds = 0.0
     current_pickups_count = 0
@@ -611,10 +669,12 @@ def reset_game_state():
     max_player_health = settings.INITIAL_PLAYER_HEALTH
     current_player_health = max_player_health
     player_pickup_radius_multiplier = 1.0
+    has_boomerang_weapon = False
 
     kill_count = 0 # Reset kill count
     enemy_spawn_timer = 0.0
     last_shot_time = 0.0
+    last_boomerang_shot_time = 0.0
 
     game_over_active = False
     store_active = False # character_select_active is handled separately
@@ -630,12 +690,24 @@ def reset_game_state():
 
 # --- Populate Store with Random Items ---
 def populate_store_offerings():
-    global displayed_store_items
+    global displayed_store_items, has_boomerang_weapon, active_orbital_weapons # Make globals accessible
     displayed_store_items.clear()
-    if len(MASTER_STORE_ITEMS) >= 3:
-        displayed_store_items = random.sample(MASTER_STORE_ITEMS, 3)
-    elif MASTER_STORE_ITEMS: # If less than 3, show all available
-        displayed_store_items = list(MASTER_STORE_ITEMS)
+
+    available_master_items = []
+    for item_template in MASTER_STORE_ITEMS:
+        can_add = True
+        if item_template["id"] == "boomerang_weapon" and has_boomerang_weapon:
+            can_add = False
+        # Example for limiting orbital weapons if desired (currently stackable)
+        # MAX_ORBITAL_WEAPONS_ALLOWED = 1 # Define in settings
+        # if item_template["id"] == "orbital_weapon" and len(active_orbital_weapons) >= MAX_ORBITAL_WEAPONS_ALLOWED:
+        #     can_add = False
+        if can_add:
+            available_master_items.append(item_template)
+
+    num_to_display = min(len(available_master_items), 3)
+    displayed_store_items = random.sample(available_master_items, num_to_display) if available_master_items else []
+
     for item in displayed_store_items: # Ensure rect is reset
         item["rect"] = None
 
@@ -877,6 +949,10 @@ while running:
                             new_orbital = OrbitalWeapon(player_pos) # Pass the actual player_pos Vector2 object
                             active_orbital_weapons.append(new_orbital)
                             print(f"Orbital Guard activated! Count: {len(active_orbital_weapons)}")
+                        elif item["id"] == "boomerang_weapon":
+                            if not has_boomerang_weapon: # Check to prevent re-activating if somehow offered again
+                                has_boomerang_weapon = True
+                                print("Boomerang Weapon activated!")
 
                         # Increase the requirement for the next bar fill
                         MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)
@@ -965,6 +1041,16 @@ while running:
                     last_shot_time = current_time
                     shoot_func = SHOOT_FUNCTIONS[selected_player_archetype["shoot_function_name"]]
                     shoot_func(player_pos, enemies, particles, settings.LIGHT_SKY_BLUE, camera_offset)
+
+            # Boomerang Firing Logic (if weapon acquired)
+            if has_boomerang_weapon and enemies and \
+               (current_time - last_boomerang_shot_time > settings.BOOMERANG_WEAPON_SHOOT_COOLDOWN):
+                last_boomerang_shot_time = current_time
+                nearest_enemy = min(enemies, key=lambda e: (e.pos - player_pos).length_squared())
+                boomerang_projectiles.append(BoomerangProjectile(player_pos.copy(), nearest_enemy.pos.copy()))
+                if boomerang_shot_sound:
+                    boomerang_shot_sound.play()
+
             # Enemy Spawning
             enemy_spawn_timer += dt
             if enemy_spawn_timer >= ENEMY_SPAWN_INTERVAL and len(enemies) < MAX_ENEMIES:
@@ -1012,6 +1098,12 @@ while running:
                 particle.update(dt, screen.get_width(), screen.get_height(), camera_offset, world_bounds_for_particles)
                 if not particle.is_alive(screen.get_width(), screen.get_height(), camera_offset, world_bounds_for_particles):
                     particles.remove(particle)
+            
+            # Update Boomerang Projectiles
+            for bp in boomerang_projectiles[:]:
+                bp.update(dt, player_pos, world_bounds_for_particles) # player_pos for future use, world_bounds for consistency
+                if not bp.is_alive(0,0,None,None): # Simpler is_alive check for boomerang
+                    boomerang_projectiles.remove(bp)
 
             # Enemy Update
             for enemy in enemies: # No need to copy if not removing during iteration here
@@ -1084,6 +1176,34 @@ while running:
                         # Particle interacts with one enemy per collision pass.
                         # If it was a standard particle, it's removed. If bouncing, it has bounced.
                         break 
+
+            # Collision: Boomerang Projectile vs Enemy
+            for bp in boomerang_projectiles: # Boomerangs are not removed on hit
+                for enemy in enemies[:]:
+                    enemy_col_radius = 0
+                    if isinstance(enemy, EnemyTriangle): enemy_col_radius = enemy.height * 0.5
+                    elif isinstance(enemy, SquareEnemy): enemy_col_radius = enemy.size * 0.707
+                    elif isinstance(enemy, HexagonEnemy): enemy_col_radius = enemy.radius_stat
+
+                    if (bp.pos - enemy.pos).length_squared() < (bp.radius + enemy_col_radius)**2:
+                        enemy_id = id(enemy)
+                        if enemy_id not in bp.hit_enemies_this_pass:
+                            bp.hit_enemies_this_pass.add(enemy_id)
+                            
+                            destroyed = False
+                            if hasattr(enemy, 'take_damage'):
+                                destroyed = enemy.take_damage(bp.damage)
+                            else: # Simple enemies might be one-hit
+                                destroyed = True 
+
+                            if enemy_hit_sound: random.choice(enemy_hit_sound).play()
+                            
+                            if destroyed:
+                                if random.random() < SPECIAL_PICKUP_CHANCE: pickup_particles.append(PickupParticle(enemy.pos, color=settings.SPECIAL_PICKUP_COLOR, width=settings.SPECIAL_PICKUP_WIDTH, height=settings.SPECIAL_PICKUP_HEIGHT, value=settings.SPECIAL_PICKUP_VALUE))
+                                else: pickup_particles.append(PickupParticle(enemy.pos, value=1))
+                                kill_count += 1
+                                if enemy in enemies: enemies.remove(enemy)
+                        # Boomerang continues, does not break from inner loop unless you want it to hit only one enemy per frame
 
             # Collision: Orbital Weapon vs Enemy
             current_time_seconds = total_game_time_seconds # Use consistent game time
@@ -1246,6 +1366,10 @@ while running:
             # Draw player projectiles (shots)
             for particle in particles: # Player shots
                 particle.draw(screen, camera_offset)
+
+            # Draw Boomerang projectiles
+            for bp in boomerang_projectiles:
+                bp.draw(screen, camera_offset)
 
             # Draw enemies
             for enemy in enemies:
