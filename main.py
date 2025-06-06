@@ -486,6 +486,7 @@ particles = []
 # SHOOT_COOLDOWN will be initialized from settings.INITIAL_SHOOT_COOLDOWN
 last_shot_time = 0.0
 
+num_standard_projectiles = 0 # Will be set when standard archetype is chosen
 num_boomerangs_to_fire = 0 # Will be set to BOOMERANG_INITIAL_COUNT when first acquired
 boomerang_projectiles = [] # List to store active boomerang projectiles
 has_boomerang_weapon = False
@@ -544,11 +545,26 @@ character_select_active = True # Start with character selection
 
 # --- Shooting Functions ---
 def shoot_standard(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
-    if not all_enemies: return
-    nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
+    global num_standard_projectiles # Access the global count
+    if not all_enemies and num_standard_projectiles > 0: # Allow shooting if projectiles > 0 even without enemies for visual feedback
+        base_direction = pygame.Vector2(0, -1) # Default upwards if no enemies
+    elif not all_enemies:
+        return # No enemies and no projectiles to shoot (should not happen if archetype selected)
+    else:
+        nearest_enemy = min(all_enemies, key=lambda e: (e.pos - player_world_pos).length_squared())
+        base_direction = (nearest_enemy.pos - player_world_pos).normalize() if (nearest_enemy.pos - player_world_pos).length_squared() > 0 else pygame.Vector2(0, -1)
     if standard_shot_sound:
         standard_shot_sound.play()
-    particle_list.append(Particle(player_world_pos, nearest_enemy.pos, color=particle_color))
+    
+    spread_angle_deg = 10 # Angle between projectiles if multiple
+    total_angle_span = (num_standard_projectiles - 1) * spread_angle_deg
+    start_angle_offset = -total_angle_span / 2
+
+    for i in range(num_standard_projectiles):
+        angle_offset = start_angle_offset + i * spread_angle_deg
+        shot_direction = base_direction.rotate(angle_offset)
+        # Target is a point far in the calculated direction
+        particle_list.append(Particle(player_world_pos, player_world_pos + shot_direction * 100, color=particle_color))
 
 def shoot_triple(player_world_pos, all_enemies, particle_list, particle_color, camera_offset_for_aiming):
     if not all_enemies: return
@@ -640,6 +656,7 @@ MASTER_STORE_ITEMS = [
     {"id": "max_health", "text": "Max Health+", "cost_text": "(Full Bar)"},
     {"id": "pickup_radius", "text": "Pickup Radius+", "cost_text": "(Full Bar)"},
     {"id": "heal_fully", "text": "Heal Fully", "cost_text": "(Full Bar)"},
+    {"id": "standard_shot_upgrade", "text": "Standard Shot+", "cost_text": "(Full Bar)"},
     {"id": "boomerang_weapon", "text": "Boomerang+", "cost_text": "(Full Bar)"}, # Changed text
     {"id": "orbital_weapon", "text": "Orbital Guard", "cost_text": "(Full Bar)"},
     # Add more items here, e.g.:
@@ -654,7 +671,7 @@ continue_button_rect = None
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons, MAX_ENEMIES, boomerang_projectiles, has_boomerang_weapon, last_boomerang_shot_time, num_boomerangs_to_fire
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier, active_orbital_weapons, MAX_ENEMIES, boomerang_projectiles, has_boomerang_weapon, last_boomerang_shot_time, num_boomerangs_to_fire, num_standard_projectiles
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -687,6 +704,7 @@ def reset_game_state():
     current_player_health = max_player_health
     player_pickup_radius_multiplier = 1.0
     num_boomerangs_to_fire = 0 # Reset, will be set to initial when first bought
+    num_standard_projectiles = 0 # Reset, will be set when standard archetype is chosen
     has_boomerang_weapon = False
 
     kill_count = 0 # Reset kill count
@@ -708,7 +726,7 @@ def reset_game_state():
 
 # --- Populate Store with Random Items ---
 def populate_store_offerings():
-    global displayed_store_items, has_boomerang_weapon, active_orbital_weapons, num_boomerangs_to_fire # Make globals accessible
+    global displayed_store_items, has_boomerang_weapon, active_orbital_weapons, num_boomerangs_to_fire, selected_player_archetype, num_standard_projectiles # Make globals accessible
     displayed_store_items.clear()
 
     available_master_items = []
@@ -716,6 +734,11 @@ def populate_store_offerings():
         can_add = True
         if item_template["id"] == "boomerang_weapon":
             if has_boomerang_weapon and num_boomerangs_to_fire >= settings.BOOMERANG_MAX_COUNT:
+                can_add = False # Don't offer if maxed out
+        elif item_template["id"] == "standard_shot_upgrade":
+            if not selected_player_archetype or selected_player_archetype["id"] != "standard":
+                can_add = False # Only offer if standard archetype is active
+            elif num_standard_projectiles >= settings.STANDARD_SHOT_MAX_PROJECTILES:
                 can_add = False # Don't offer if maxed out
         # Example for limiting orbital weapons if desired (currently stackable)
         # MAX_ORBITAL_WEAPONS_ALLOWED = 1 # Define in settings
@@ -933,6 +956,9 @@ while running:
                         reset_game_state() # Initialize game with selected character
                         print(f"Selected: {selected_player_archetype['name']}")
                         break
+                if selected_player_archetype and selected_player_archetype["id"] == "standard":
+                    num_standard_projectiles = settings.STANDARD_SHOT_INITIAL_PROJECTILES
+                    print(f"Standard archetype selected. Projectiles: {num_standard_projectiles}")
         elif game_over_active:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
@@ -976,6 +1002,10 @@ while running:
                             elif num_boomerangs_to_fire < settings.BOOMERANG_MAX_COUNT:
                                 num_boomerangs_to_fire += 1
                                 print(f"Boomerang Upgraded! Now firing {num_boomerangs_to_fire} boomerang(s).")
+                        elif item["id"] == "standard_shot_upgrade":
+                            if selected_player_archetype and selected_player_archetype["id"] == "standard" and num_standard_projectiles < settings.STANDARD_SHOT_MAX_PROJECTILES:
+                                num_standard_projectiles += 1
+                                print(f"Standard Shot Upgraded! Now firing {num_standard_projectiles} projectile(s).")
 
                         # Increase the requirement for the next bar fill
                         MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)

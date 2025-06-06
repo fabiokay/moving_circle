@@ -99,6 +99,10 @@ PICKUP_PARTICLE_HEIGHT = 20
 SPECIAL_PICKUP_WIDTH = 15
 SPECIAL_PICKUP_HEIGHT = 22
 
+# --- Standard shot Settings ---
+STANDARD_SHOT_INITIAL_PROJECTILES = 1
+STANDARD_SHOT_MAX_PROJECTILES = 5 # Max projectiles for the standard shot upgrade
+
 # --- Bouncing Projectile Settings ---
 BOUNCING_PARTICLE_LIFETIME = 7  # seconds
 BOUNCING_PARTICLE_SPEED = 220
