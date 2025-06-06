@@ -406,40 +406,56 @@ class BouncingParticle(Particle):
 # --- Boomerang Projectile Setup ---
 class BoomerangProjectile(Particle):
     def __init__(self, start_pos, initial_target_pos,
-                 color=settings.BOOMERANG_PROJECTILE_COLOR,
-                 speed=settings.BOOMERANG_PROJECTILE_SPEED,
-                 radius=settings.BOOMERANG_PROJECTILE_RADIUS,
-                 lifetime=settings.BOOMERANG_PROJECTILE_LIFETIME,
-                 damage=settings.BOOMERANG_PROJECTILE_DAMAGE):
-        super().__init__(start_pos, initial_target_pos, color, speed, radius)
-        self.initial_target_pos = pygame.Vector2(initial_target_pos)
-        self.lifetime = lifetime
+                 color=settings.BOOMERANG_PROJECTILE_COLOR, # Uses default from settings
+                 max_speed=settings.BOOMERANG_PROJECTILE_SPEED, # Max speed
+                 radius=settings.BOOMERANG_PROJECTILE_RADIUS, # Uses default from settings
+                 lifetime=settings.BOOMERANG_PROJECTILE_LIFETIME, # Uses default from settings
+                 damage=settings.BOOMERANG_PROJECTILE_DAMAGE): # Uses default from settings
+        # The 'speed' parameter for Particle's __init__ is used to set initial direction correctly.
+        # The actual movement speed will be self.current_speed.
+        super().__init__(start_pos, initial_target_pos, color, max_speed, radius)
+        self.max_speed = max_speed
+        self.current_speed = max_speed # Starts at max speed
+        self.lifetime = lifetime # Overall lifetime
         self.age = 0.0
         self.damage = damage
-        self.state = "to_target"  # "to_target" or "returning"
+        self.state = "outbound"  # "outbound", "slowing", "returning"
         self.hit_enemies_this_pass = set() # Store IDs of enemies hit in current pass
-        self.turn_distance_threshold_sq = 15**2 # How close to target before turning (squared)
+        # self.initial_target_pos is not needed for turning anymore
+        # self.turn_distance_threshold_sq is not needed
 
     def update(self, dt, player_pos_not_used_for_simple_return, world_bounds=None): # player_pos might be needed for smarter return
         self.age += dt
         if not self.is_alive(0,0,None,None): # Basic lifetime check
             return
 
-        if self.state == "to_target":
-            # Check if close enough to initial_target_pos to turn
-            if (self.initial_target_pos - self.pos).length_squared() < self.turn_distance_threshold_sq:
+        if self.state == "outbound":
+            if self.age >= settings.BOOMERANG_TURN_DELAY:
+                self.state = "slowing"
+            # If direction was zero (e.g. spawned on target), set a default direction
+            if self.direction.length_squared() == 0:
+                self.direction = pygame.Vector2(0, -1) # Default upwards
+            self.pos += self.direction * self.current_speed * dt
+
+        elif self.state == "slowing":
+            # Decelerate
+            # Calculate deceleration needed to reach 0 speed in SLOWING_DURATION
+            if settings.BOOMERANG_SLOWING_DURATION > 0:
+                deceleration = self.max_speed / settings.BOOMERANG_SLOWING_DURATION
+                self.current_speed -= deceleration * dt
+            
+            if self.current_speed <= 0:
+                self.current_speed = 0
                 self.state = "returning"
                 self.direction *= -1  # Reverse direction
-                self.hit_enemies_this_pass.clear() # Allow hitting enemies again
-            else:
-                # If direction was zero (e.g. spawned on target), set a default return direction
-                if self.direction.length_squared() == 0:
-                    self.direction = pygame.Vector2(0, -1) # Default upwards
-                    self.state = "returning"
-                    self.hit_enemies_this_pass.clear()
+                self.hit_enemies_this_pass.clear() # Allow hitting enemies again for the return trip
+            self.pos += self.direction * self.current_speed * dt
 
-        # Common movement for both states (direction might have been updated)
-        self.pos += self.direction * self.speed * dt
+        elif self.state == "returning":
+            # Accelerate
+            self.current_speed += settings.BOOMERANG_RETURN_ACCELERATION * dt
+            self.current_speed = min(self.current_speed, self.max_speed) # Cap at max speed
+            self.pos += self.direction * self.current_speed * dt
 
     def draw(self, surface, camera_offset):
         # Could add a slight rotation or different visual for boomerang
