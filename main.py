@@ -388,6 +388,7 @@ last_shot_time = 0.0
 # --- Player Variables ---
 movement_speed = settings.INITIAL_MOVEMENT_SPEED  # Player movement speed, made global for upgrades
 player_level = settings.INITIAL_PLAYER_LEVEL
+player_pickup_radius_multiplier = 1.0 # For pickup radius upgrade
 max_player_health = settings.INITIAL_PLAYER_HEALTH # Max health can be upgraded
 current_player_health = settings.INITIAL_PLAYER_HEALTH
 
@@ -525,18 +526,26 @@ except pygame.error as e:
 ui_font = store_font_medium # Use the medium font for UI elements like the timer
 
 
-store_items = [
-    {"id": "faster_shots", "text": "Faster Shots", "cost_text": "(Full Bar)", "rect": None},
-    {"id": "player_speed", "text": "Player Speed+", "cost_text": "(Full Bar)", "rect": None},
-    {"id": "max_health", "text": "Max Health+", "cost_text": "(Full Bar)", "rect": None},
+# --- Master Store Items List ---
+MASTER_STORE_ITEMS = [
+    {"id": "faster_shots", "text": "Faster Shots", "cost_text": "(Full Bar)"},
+    {"id": "player_speed", "text": "Player Speed+", "cost_text": "(Full Bar)"},
+    {"id": "max_health", "text": "Max Health+", "cost_text": "(Full Bar)"},
+    {"id": "pickup_radius", "text": "Pickup Radius+", "cost_text": "(Full Bar)"},
+    {"id": "heal_fully", "text": "Heal Fully", "cost_text": "(Full Bar)"},
+    # Add more items here, e.g.:
+    # {"id": "damage_boost", "text": "Damage Boost", "cost_text": "(Full Bar)"},
+    # {"id": "temp_invincibility", "text": "Brief Shield", "cost_text": "(Full Bar)"},
 ]
+displayed_store_items = [] # Will hold the 3 items currently shown in the store
+
 continue_button_text = "Continue Game"
 continue_button_rect = None
 
 # --- Reset Game State ---
 def reset_game_state():
     global player_pos, enemies, particles, pickup_particles, total_game_time_seconds
-    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions
+    global current_pickups_count, MAX_PICKUPS_FOR_FULL_BAR, SHOOT_COOLDOWN, movement_speed, camera_offset, current_player_health, max_player_health, kill_count, player_trail_positions, player_pickup_radius_multiplier
     global game_over_active, store_active, enemy_spawn_timer, last_shot_time, player_level
 
     # Stop any currently playing background music first to avoid overlap on restart
@@ -564,6 +573,7 @@ def reset_game_state():
     player_level = settings.INITIAL_PLAYER_LEVEL
     max_player_health = settings.INITIAL_PLAYER_HEALTH
     current_player_health = max_player_health
+    player_pickup_radius_multiplier = 1.0
 
     kill_count = 0 # Reset kill count
     enemy_spawn_timer = 0.0
@@ -571,6 +581,7 @@ def reset_game_state():
 
     game_over_active = False
     store_active = False # character_select_active is handled separately
+    displayed_store_items.clear() # Clear store offerings
     
     # Reset camera based on player's starting position
     camera_offset.x = player_pos.x - screen.get_width() / 2
@@ -579,6 +590,17 @@ def reset_game_state():
     # Start background music for the stage if loaded
     if background_music_stage_1:
         background_music_stage_1.play(loops=-1) # Play indefinitely
+
+# --- Populate Store with Random Items ---
+def populate_store_offerings():
+    global displayed_store_items
+    displayed_store_items.clear()
+    if len(MASTER_STORE_ITEMS) >= 3:
+        displayed_store_items = random.sample(MASTER_STORE_ITEMS, 3)
+    elif MASTER_STORE_ITEMS: # If less than 3, show all available
+        displayed_store_items = list(MASTER_STORE_ITEMS)
+    for item in displayed_store_items: # Ensure rect is reset
+        item["rect"] = None
 
 # --- Draw Game Over Screen ---
 def draw_game_over_screen(surface, final_time_seconds):
@@ -634,7 +656,7 @@ def draw_store_window(surface):
 
     mouse_pos = pygame.mouse.get_pos()
 
-    for i, item in enumerate(store_items):
+    for i, item in enumerate(displayed_store_items): # Use the currently displayed items
         item_text = f"{item['text']} {item['cost_text']}"
         button_rect = pygame.Rect(store_x + 50, current_y, store_width - 100, button_height)
         item["rect"] = button_rect # Store rect for click detection
@@ -793,12 +815,15 @@ while running:
         elif store_active: # Store is active, and game is not over
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # Left mouse button
                 mouse_pos = pygame.mouse.get_pos()
-                for item in store_items:
+                for item in displayed_store_items: # Check against displayed items
                     if item["rect"] and item["rect"].collidepoint(mouse_pos):
                         # Apply upgrade
                         if item["id"] == "faster_shots":
                             SHOOT_COOLDOWN = max(0.05, SHOOT_COOLDOWN * 0.85) 
                             print(f"Faster Shots purchased! New cooldown: {SHOOT_COOLDOWN:.2f}")
+                        elif item["id"] == "pickup_radius":
+                            player_pickup_radius_multiplier *= 1.25
+                            print(f"Pickup Radius+ purchased! New multiplier: {player_pickup_radius_multiplier:.2f}")
                         elif item["id"] == "player_speed":
                             movement_speed = int(movement_speed * 1.15)
                             print(f"Player Speed+ purchased! New speed: {movement_speed:.0f}")
@@ -806,6 +831,9 @@ while running:
                             max_player_health = int(max_player_health * 1.20)
                             current_player_health = max_player_health # Heal to new max
                             print(f"Max Health+ purchased! New max health: {max_player_health}")
+                        elif item["id"] == "heal_fully":
+                            current_player_health = max_player_health
+                            print(f"Healed Fully! Health: {current_player_health}/{max_player_health}")
 
                         # Increase the requirement for the next bar fill
                         MAX_PICKUPS_FOR_FULL_BAR = int(MAX_PICKUPS_FOR_FULL_BAR * 1.2 + 1)
@@ -813,14 +841,17 @@ while running:
 
                         store_active = False
                         current_pickups_count = 0 # Reset bar
+                        displayed_store_items.clear() # Clear offerings for next time
                         break 
                 # If no item was purchased (due to break), check continue button
                 if store_active and continue_button_rect and continue_button_rect.collidepoint(mouse_pos):
                     store_active = False
                     current_pickups_count = 0 # Reset bar
+                    displayed_store_items.clear() # Clear offerings
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 store_active = False
                 current_pickups_count = 0 # Reset bar when escaping store
+                displayed_store_items.clear() # Clear offerings
         else: # Gameplay is active (not game over, not store)
             # Handle other gameplay-specific events if any (currently none besides quit handled globally)
             pass
@@ -1011,9 +1042,10 @@ while running:
             pickups_to_keep = []
             for pickup in pickup_particles:
                 # AABB collision check: player (circle approximated as square) vs pickup (ellipse bounding box)
-                player_world_rect = pygame.Rect(player_pos.x - player_radius,
-                                                player_pos.y - player_radius,
-                                                player_radius * 2, player_radius * 2)
+                effective_player_pickup_radius = player_radius * player_pickup_radius_multiplier
+                player_world_rect = pygame.Rect(player_pos.x - effective_player_pickup_radius,
+                                                player_pos.y - effective_player_pickup_radius,
+                                                effective_player_pickup_radius * 2, effective_player_pickup_radius * 2)
                 pickup_world_rect = pygame.Rect(pickup.pos.x - pickup.width / 2,
                                                 pickup.pos.y - pickup.height / 2,
                                                 pickup.width, pickup.height)
@@ -1024,6 +1056,7 @@ while running:
                         current_pickups_count += pickup.value
                     if current_pickups_count >= MAX_PICKUPS_FOR_FULL_BAR and not store_active: # Check store_active again
                         player_level += 1 # Increment level when bar is full
+                        populate_store_offerings() # Choose items for the store
                         store_active = True
                         current_pickups_count = MAX_PICKUPS_FOR_FULL_BAR # Cap it
                 else:
