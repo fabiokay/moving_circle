@@ -45,21 +45,15 @@ try:
     background_music_stage_1 = pygame.mixer.Sound(audio.BACKGROUND_MUSIC_STAGE_1)
     if background_music_stage_1:
         background_music_stage_1.set_volume(0.1) # Set volume to 50%
-    standard_shot_sound = pygame.mixer.Sound("audio/single_shot.wav")
-    nova_shot_sound = pygame.mixer.Sound("audio/nova_shot.wav")
-    triple_shot_sound = pygame.mixer.Sound("audio/triple_shot.wav")
+    standard_shot_sound = pygame.mixer.Sound(audio.SINGLE_SHOT_SOUND)
+    nova_shot_sound = pygame.mixer.Sound(audio.NOVA_SHOT_SOUND)
+    triple_shot_sound = pygame.mixer.Sound(audio.TRIPLE_SHOT_SOUND)
     boomerang_shot_sound = pygame.mixer.Sound(audio.BOOMERANG_SHOT_SOUND)
     bouncing_shot_sound = pygame.mixer.Sound(audio.BOUNCING_SHOT)
-    # damaging_aura_sound = pygame.mixer.Sound("audio/damaging_aura.wav") # Example if you have it
-    pickup_sound = pygame.mixer.Sound("audio/pickup_particle.wav")
-    enemy_hit_sound = [
-        pygame.mixer.Sound("audio/enemy_hit1.wav"),
-        pygame.mixer.Sound("audio/enemy_hit2.wav"),
-        pygame.mixer.Sound("audio/enemy_hit3.wav"),
-        pygame.mixer.Sound("audio/enemy_hit4.wav"),
-    ]
-    player_death_sound = pygame.mixer.Sound("audio/player_death.wav")
-    select_archetype_sound = pygame.mixer.Sound("audio/select_player.wav")
+    pickup_sound = pygame.mixer.Sound(audio.PICKUP_SOUND)
+    enemy_hit_sound = [pygame.mixer.Sound(path) for path in audio.ENEMY_HIT_SOUNDS]
+    player_death_sound = pygame.mixer.Sound(audio.PLAYER_DEATH_SOUND)
+    select_archetype_sound = pygame.mixer.Sound(audio.SELECT_ARCHETYPE_SOUND)
     _original_player_image = pygame.image.load(settings.IMAGE_PLAYER_PATH).convert_alpha()
     _original_player_triple_image = pygame.image.load(settings.IMAGE_PLAYER_TRIPLE_SHOT_PATH).convert_alpha()
     _original_player_nova_image = pygame.image.load(settings.IMAGE_PLAYER_NOVA_BURST_PATH).convert_alpha()
@@ -78,7 +72,11 @@ except pygame.error as e:
 
 # --- Static Background Image ---
 try:
-    static_background_image = pygame.image.load(settings.IMAGE_BACKGROUND_PATH).convert_alpha()
+    loaded_image = pygame.image.load(settings.IMAGE_BACKGROUND_PATH)
+    if loaded_image.get_alpha() is not None:
+        static_background_image = loaded_image.convert_alpha()
+    else:
+        static_background_image = loaded_image.convert()
     # If your image doesn't have alpha, you can use .convert() instead
 except pygame.error as e:
     print(f"Error loading static background image: {e}")
